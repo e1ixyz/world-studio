@@ -82,6 +82,8 @@ harness/     dev-only tooling: server plugin, in-game chat, landing page
 index.html   landing page shell, loads harness/landing/main.js
 play.html    game page shell, loads engine/runtime.js
 desktop/     Electron shell for the macOS app (electron-app branch)
+CLAUDE.md    project instructions for Claude: run the parity skill before finishing a change
+.claude/     project skills (skills/parity: browser and desktop app parity)
 ```
 
 ### `engine/`
