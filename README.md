@@ -1,0 +1,86 @@
+# World Studio
+
+A local studio for building 3D browser games with Claude while they run. Each project is its own game on a shared Three.js engine. Open one, walk around in it, press Tab to switch to build mode, click anything and tell Claude what to change. The game reloads where you stand, with your position and progress kept.
+
+Built with Three.js 0.186 and Vite 8, in plain JavaScript modules with no framework and no asset files. Every texture is drawn on a canvas and every sound is synthesized with Web Audio.
+
+## Run it
+
+```sh
+npm install
+npm run dev
+```
+
+Open the URL Vite prints. The configured port is 5173, but Vite moves to the next free port if that one is taken.
+
+The chat needs the `claude` CLI installed and logged in.
+
+`npm run build` makes a production build in `dist/`, and `npm run preview` serves it. The production build plays the games but has no chat, no project editing and no saving.
+
+## How to use it
+
+The landing page lists your projects. Click a card to play, or use New project to start one from a template. If you describe the game in the New project dialog, Claude builds a first version as its opening prompt, and the project opens in build mode.
+
+Each card also has Build, Duplicate, Rename and Delete. Delete moves the project to `.harness/trash/`, so you can get it back by moving the folder into `games/`.
+
+Inside a game:
+
+- Play it like a normal game. The start menu has Play and Build mode buttons.
+- Press Tab for build mode. You get a free camera, and the world is paused by default ("Resume world" in the top bar runs it) so you can look at things while they hold still. The top bar also has a time-of-day slider.
+- Press backtick to open the Claude panel, or Enter for a one-line prompt bar that keeps you in the game. Each prompt runs Claude Code on this project only.
+- Point and prompt: in build mode, hover to see what's clickable and click an object. The Properties panel shows what it is, and "Ask Claude about this" attaches it to your next prompt. "Attach view" (K) adds a screenshot of what you see.
+- Tweaks: under the selection in the Properties panel are the sliders, colors and toggles the game exposes, with the engine's world and player settings folded under "Engine settings". Changes apply live. Save writes them to the game's `tweaks.json`; Discard undoes unsaved changes.
+- Checkpoints: one is saved before every prompt. Open the Checkpoints tab in the Claude panel and use "Undo last prompt" or Restore. Restoring saves a checkpoint first, so a restore can be undone too.
+- Engine edits: by default Claude can edit only this game's folder. Choose "Allow engine edits" in the Claude panel's ⋯ menu to let it change the shared engine for one prompt. Engine changes affect every game.
+
+When a runtime error shows up, the chat shows it with an "Ask Claude to fix" button.
+
+## Included games and templates
+
+- Meridian City (`games/meridian-city/`): a procedurally generated island city about 1.5 km across, with stepped skyscrapers, parks, a 360 m landmark tower, about 420 AI cars and 900 pedestrians. Find all 40 data cores; their light beams show from a distance, and a timer runs until you collect the last one. A full day passes in 12 real minutes.
+- Templates for new projects: Blank world (an empty flat plane) and Meridian City.
+
+## Controls
+
+Play mode:
+
+| Key | Action |
+| --- | --- |
+| WASD / arrows | Move, or drive |
+| Mouse | Look (click the game to lock the pointer) |
+| Shift | Sprint, boost, fly faster |
+| Space | Jump, fly up, handbrake |
+| C | Fly down |
+| E | Enter or exit a car (slow down to exit) |
+| F | Toggle flight |
+| H | Horn |
+| M | Full map |
+| T (hold) | Fast-forward time |
+| N | Jump between day and night |
+| G | Switch graphics quality (High / Low) |
+| Tab | Build mode |
+| Esc | Pause |
+
+Build mode:
+
+| Key | Action |
+| --- | --- |
+| Right-drag | Look |
+| WASD | Move the camera |
+| Q / E | Down / up |
+| Shift | Move faster |
+| Mouse wheel | Change camera speed |
+| Click | Select an object |
+| F | Frame the selection |
+| Esc | Clear the selection |
+| K | Attach a screenshot to the next prompt |
+| P | Play from the camera's position |
+| Tab | Back to play mode |
+
+Chat (dev server only): backtick toggles the panel, and Enter opens the quick prompt bar.
+
+## Cost and safety
+
+Each prompt is a real Claude Code run billed to your account. The harness runs only under `npm run dev`, accepts requests only from this machine, and isn't part of production builds.
+
+See [HANDOFF.md](HANDOFF.md) for how the code is organized and how the harness works, and [engine/API.md](engine/API.md) for the contract a game follows.
