@@ -25,16 +25,22 @@ for (const level of ['log', 'info', 'warn', 'error']) {
   };
 }
 
-// Apps launched from Finder get a bare PATH (/usr/bin:/bin:...), so `claude` and `npx` aren't found.
-// Ask the user's login shell for its PATH, the same thing fix-path does.
+// Apps launched from Finder get a bare PATH (/usr/bin:/bin:...) and none of the shell's exports, so
+// `claude` and `npx` aren't found and DEVCHAT_* settings are lost. Ask the user's login shell for them,
+// like fix-path does. Only PATH and the harness's own DEVCHAT_* variables are copied.
+const SHELL_VARS = /^(PATH|DEVCHAT_\w+)$/;
 function fixPath() {
   const shellBin = process.env.SHELL || '/bin/zsh';
   try {
-    const out = execFileSync(shellBin, ['-ilc', 'printf "__WS_PATH__%s__WS_PATH__" "$PATH"'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] });
-    const m = out.match(/__WS_PATH__(.*)__WS_PATH__/);
-    if (m && m[1]) process.env.PATH = m[1];
+    const out = execFileSync(shellBin, ['-ilc', 'printf "__WS_ENV__"; env -0; printf "__WS_ENV__"'], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] });
+    const body = out.split('__WS_ENV__')[1] || '';
+    for (const entry of body.split('\0')) {
+      const i = entry.indexOf('=');
+      const key = entry.slice(0, i);
+      if (i > 0 && SHELL_VARS.test(key) && (key === 'PATH' || !(key in process.env))) process.env[key] = entry.slice(i + 1);
+    }
   } catch (err) {
-    console.warn('Could not read PATH from login shell:', err.message);
+    console.warn('Could not read environment from login shell:', err.message);
   }
   const home = app.getPath('home');
   const extra = [path.join(home, '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin'];

@@ -41,7 +41,9 @@ fs.rmSync(installed, { recursive: true, force: true });
 execFileSync('ditto', [built, installed]);
 
 const link = path.join(os.homedir(), 'Desktop', `${NAME}.app`);
-fs.rmSync(link, { force: true });
+const existing = fs.lstatSync(link, { throwIfNoEntry: false });
+if (existing?.isSymbolicLink()) fs.unlinkSync(link);
+else if (existing) throw new Error(`${link} exists and is not a link; move it and run again`);
 fs.symlinkSync(installed, link);
 execFileSync('touch', [installed]); // nudge Finder to pick up the new icon
 

@@ -62,10 +62,12 @@ npm run app          # run the desktop shell from source
 - The app is a thin shell. The bundle holds only `package.json` and `desktop/main.js`. At launch it imports Vite from the checkout's `node_modules` and calls `createServer` on the checkout, so the harness plugin, games, chats and checkpoints are the same ones `npm run dev` uses. Changes to `engine/`, `games/` or `harness/` need no rebuild.
 - The checkout path comes from, in order: `WORLD_STUDIO_ROOT`, `~/Library/Application Support/World Studio/config.json`, `desktop/root.json` (written by the package script, gitignored), then the repo itself when unpackaged. If none of them has `vite.config.js` and `node_modules/vite`, a folder picker asks and saves the answer to `config.json`.
 - Port 5199, not 5173 (`desktop/main.js:10`). A terminal dev server and the app can both run, but each has its own harness, so don't prompt the same project from both at once.
-- Finder launches apps with a bare PATH, so `fixPath()` (`desktop/main.js:30`) reads PATH from the login shell (`$SHELL -ilc`) and adds `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`. The resolved `claude` path is written to the log.
+- Finder launches apps with a bare PATH and none of the shell's exports, so `fixPath()` (`desktop/main.js:33`) reads the login shell's environment (`$SHELL -ilc 'env -0'`) and copies PATH and any `DEVCHAT_*` variables (`SHELL_VARS`, `desktop/main.js:32`). It also adds `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`. The resolved `claude` path is written to the log. Any other variable the server reads has to be added to `SHELL_VARS`.
 - Logs: `~/Library/Logs/World Studio/main.log` (console output from the main process, including Vite).
 - Quitting closes the Vite server. The plugin now kills running agent jobs when the HTTP server closes (`harness/server/plugin.js:476`), so a quit doesn't leave a `claude` run editing files.
 - Links to other origins open in the default browser. Only one instance runs; opening it again focuses the window.
+
+- Parity rule: every change has to work in both the browser and the app. `CLAUDE.md` tells Claude to run the project skill `.claude/skills/parity/SKILL.md` before finishing; it lists where the two differ and how to check each side. `.claude/skills/parity/scripts/cdp.mjs` drives the app window over DevTools (`npx electron . --remote-debugging-port=9333`). The in-app agent skips it.
 
 Verified on 2026-10-01 (macOS, arm64, Electron 44): the installed app launched with `open`, found `claude` at `~/.local/bin/claude`, served the landing page, and Meridian loaded in build mode in the app window. Not verified: a real prompt run from the app, and pointer lock in the app window (needs a person at the keyboard).
 
