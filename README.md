@@ -41,7 +41,7 @@ Inside a game:
 - Point and prompt: in build mode, hover to see what's clickable and click an object. The Properties panel shows what it is, and "Ask about this" attaches it to your next prompt. "Attach view" (K) adds a screenshot of what you see.
 - Tweaks: under the selection in the Properties panel are the sliders, colors and toggles the game exposes, with the engine's world and player settings folded under "Engine settings". Changes apply live. Save writes them to the game's `tweaks.json`; Discard undoes unsaved changes.
 - Checkpoints: one is saved before every prompt. Open the Checkpoints tab in the Ask panel and use "Undo last prompt" or Restore. Restoring saves a checkpoint first, so a restore can be undone too.
-- Engine edits: by default Claude can edit only this game's folder. Choose "Allow engine edits" in the Ask panel's ⋯ menu to let it change the shared engine for one prompt. Engine changes affect every game.
+- Engine edits: by default Claude can edit only this game's folder. Choose "Allow engine edits" in the Ask panel's ⋯ menu to let it change the shared engine for one prompt, or "Always allow engine edits" to let every prompt in every project change both the game and the engine until you turn it off. The setting is shared by the browser and the desktop app. Engine changes affect every game.
 
 When a runtime error shows up, the chat shows it with an "Fix it" button.
 

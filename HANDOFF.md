@@ -132,6 +132,7 @@ Templates are copied, never linked. See Gotchas.
 
 ### `.harness/`
 
+- `settings.json` - studio-wide settings, currently only `alwaysEngine`. Both the browser dev server and the desktop app read it fresh on every prompt.
 - `projects/<slug>/chat.json` - chat log and Claude session id for each project. Meridian's chat history from before the restructure was migrated here.
 - `checkpoints/<slug>/<id>/` - one snapshot per prompt, with `meta.json`.
 - `shots/<slug>/` - screenshots attached to prompts.
@@ -159,6 +160,7 @@ All routes sit under `/__harness`.
 - `POST /projects` creates one from `{ name, template, description }`. It copies `templates/<template>/` into `games/<slug>/` and writes `game.json` (`harness/server/plugin.js:284`). If a description was given, Claude builds it as the project's first prompt.
 - `POST /projects/<slug>/rename`, `/duplicate` and `/delete`. Delete moves the folder to `.harness/trash/` and refuses while Claude is working on that project (`harness/server/plugin.js:364`).
 - `GET /templates` lists folders in `templates/` that have a `game.js`.
+- `GET /settings` returns the studio settings and `POST /settings` takes `{ alwaysEngine }`. It writes `.harness/settings.json` and sends a `harness:settings` HMR event so open tabs on the same server update (`harness/server/plugin.js:364`).
 - `POST /shot`, `/thumb` and `/tweaks` take `{ slug, ... }`. They write a screenshot to `.harness/shots/<slug>/`, `thumb.jpg`, or `tweaks.json`.
 
 The server sends two custom HMR events. `harness:projects` tells the landing page to re-render. `harness:reload` tells game tabs to reload (see Reloads).
@@ -181,7 +183,7 @@ claude -p <prompt> --output-format stream-json --verbose --permission-mode defau
   [--resume <sessionId>]
 ```
 
-- "Allow engine edits" adds `Edit(engine/**)` and `Write(engine/**)` for that one prompt (`harness/server/plugin.js:176`).
+- Engine edits add `Edit(engine/**)` and `Write(engine/**)`. A prompt gets them when the client sends `engine: true` ("Allow engine edits", one prompt) or when the `alwaysEngine` setting is on. The server checks the setting itself in `run()` (`harness/server/plugin.js:179`), so it also covers a new project's first build from the landing page.
 - `systemPrompt()` (`harness/server/plugin.js:33`) names the game folder, says whether engine edits are allowed, tells Claude to read `engine/API.md`, to expose tweaks and selectables, to keep `snapshot()`/`restore()` current, and not to start servers or tell the user to refresh.
 - Each project keeps its own Claude session and resumes it. The chat's New button clears it.
 - The child gets `WORLD_STUDIO_AGENT=1` (`harness/server/plugin.js:182`). The user's global `~/.claude/hooks/handoff-stop.mjs` exits early when it's set, so these short runs don't trigger the handoff Stop hook.
@@ -225,8 +227,9 @@ Each prompt is a real Claude Code run billed to the user's account. A tiny edit 
   - the "Camera view" / "My position" toggle (on by default), which prepends `[Game context: ...]`. In build mode it describes the free camera, otherwise the player;
   - the current build-mode selection (dismissable with ×);
   - a screenshot ("Attach view", or K in build mode);
-  - "Engine edits: all games" when armed.
+  - "Engine edits: all games" when armed for one prompt, or "Engine edits: always on" (no ×) while the setting is on.
 - "Allow engine edits" in the ⋯ menu allows engine edits for the next prompt only, and turns itself off after each send.
+- "Always allow engine edits" in the same menu turns on the studio-wide `alwaysEngine` setting. While it's on, the one-prompt item is hidden. The client reloads the setting when the menu opens and when the window gets focus, because the browser and the app run separate servers and only the server that saved it sends the live event.
 - Each turn's tool calls collapse into one "N steps" row. Earlier messages in a turn are dimmed as progress notes. While Claude works, a card above the composer shows the latest step, the elapsed time and Stop, and Send is disabled.
 - The Checkpoints tab has "Undo last prompt", then every checkpoint newest first, each with Restore.
 - An empty chat shows three example prompts; one adapts to the selected object's kind.

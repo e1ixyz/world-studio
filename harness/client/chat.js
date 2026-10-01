@@ -42,6 +42,7 @@ root.innerHTML = `
         <button type="button" class="ws-icon dc-close" aria-label="Hide Ask" title="Hide (\`)">${icons.close}</button>
         <div class="dc-menu hidden" role="menu">
           <button type="button" role="menuitemcheckbox" aria-checked="false" class="dc-menu-engine">${icons.warn}<span><b>Allow engine edits</b><small>For the next prompt only. Engine changes affect every game.</small></span></button>
+          <button type="button" role="menuitemcheckbox" aria-checked="false" class="dc-menu-always">${icons.warn}<span><b>Always allow engine edits</b><small>Every prompt, in every project, can change the game and the shared engine.</small></span></button>
           <button type="button" role="menuitem" class="dc-menu-new">${icons.plus}<span><b>New conversation</b><small>Starts fresh without this chat’s history. Checkpoints stay.</small></span></button>
         </div>
       </div>
@@ -72,10 +73,11 @@ const $ = (s) => root.querySelector(s);
 const panel = $('.dc-panel'), log = $('.dc-log'), historyEl = $('.dc-history'), form = $('.dc-form'), input = $('.dc-form textarea');
 const sendBtn = $('.dc-send'), elapsedEl = $('.dc-elapsed'), stepEl = $('.dc-working-step'), chipsEl = $('.dc-chips');
 const quick = $('.dc-quick'), quickInput = $('.dc-quick input'), feed = $('.dc-feed'), feedText = $('.dc-feed-text');
-const menu = $('.dc-menu'), engineItem = $('.dc-menu-engine');
+const menu = $('.dc-menu'), engineItem = $('.dc-menu-engine'), alwaysItem = $('.dc-menu-always');
 const attachments = { shot: null };
 let running = false, startedAt = 0, lastSeq = 0, isOpen = false, live = false, feedTimer = 0;
-let engineArmed = false, dismissedSel = '', tab = 'chat';
+let engineArmed = false, alwaysEngine = false, dismissedSel = '', tab = 'chat';
+const engineOn = () => engineArmed || alwaysEngine;
 let cameraContext = true;
 try { cameraContext = localStorage.getItem(CAM_KEY) !== '0'; } catch { /* default on */ }
 const seenErrors = new Set();
@@ -165,6 +167,7 @@ function closeMenu() {
 $('.dc-menu-btn').addEventListener('click', (e) => {
   e.stopPropagation();
   menu.classList.toggle('hidden');
+  if (!menu.classList.contains('hidden')) loadSettings(); // another window may have changed it
 });
 document.addEventListener('click', (e) => !menu.contains(e.target) && closeMenu());
 engineItem.addEventListener('click', () => {
@@ -176,6 +179,39 @@ function setEngine(on) {
   engineItem.setAttribute('aria-checked', String(on));
   renderChips();
 }
+
+// "Always allow engine edits" is a studio-wide setting kept by the server, so it applies to every
+// project and every window (browser or desktop app), and the server enforces it on each prompt.
+alwaysItem.addEventListener('click', async () => {
+  closeMenu();
+  const r = await postSettings({ alwaysEngine: !alwaysEngine });
+  if (r.ok) applySettings(r);
+  else addItem({ kind: 'error', text: r.error || 'Could not save the setting' });
+});
+function applySettings(s) {
+  alwaysEngine = !!s.alwaysEngine;
+  alwaysItem.setAttribute('aria-checked', String(alwaysEngine));
+  engineItem.hidden = alwaysEngine;
+  if (alwaysEngine) setEngine(false);
+  else renderChips();
+}
+async function loadSettings() {
+  try {
+    const res = await fetch('/__harness/settings');
+    if (res.ok) applySettings(await res.json());
+  } catch { /* server offline: keep the last known value */ }
+}
+async function postSettings(body) {
+  try {
+    const res = await fetch('/__harness/settings', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Devchat': '1' }, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, ...data };
+  } catch (err) {
+    return { ok: false, error: `Dev server unreachable (${err.message})` };
+  }
+}
+loadSettings();
+window.addEventListener('focus', loadSettings);
 $('.dc-menu-new').addEventListener('click', async () => {
   closeMenu();
   if (running) return;
@@ -253,7 +289,7 @@ async function sendPrompt(text) {
   const sel = currentSelection();
   if (sel) blocks.push(sel);
   if (attachments.shot) blocks.push(`[Screenshot: ${attachments.shot.path} (the user's current view; read it with the Read tool)]`);
-  const extras = [sel && 'selection', attachments.shot && 'screenshot', engineArmed && 'engine edits'].filter(Boolean);
+  const extras = [sel && 'selection', attachments.shot && 'screenshot', engineOn() && 'engine edits'].filter(Boolean);
   const prefix = blocks.filter(Boolean).join('\n');
   const r = await post('/prompt', {
     text: prefix ? `${prefix}\n\n${text}` : text,
@@ -309,7 +345,7 @@ let lastChipSig = '';
 function renderChips() {
   const sel = currentSelection();
   const selName = sel.match(/^\[Selected object: ([^.]*?) centered/)?.[1] || 'object';
-  const sig = [cameraContext, sel, attachments.shot?.path, engineArmed, gameState()].join('|');
+  const sig = [cameraContext, sel, attachments.shot?.path, engineArmed, alwaysEngine, gameState()].join('|');
   if (sig === lastChipSig) return;
   lastChipSig = sig;
   chipsEl.innerHTML = '';
@@ -343,7 +379,9 @@ function renderChips() {
       renderChips();
     });
   }
-  if (engineArmed) {
+  if (alwaysEngine) {
+    chip('dc-chip-engine', `${icons.warn}<span>Engine edits: always on</span>`, 'Every prompt may change the shared engine. Turn this off in the ⋯ menu.');
+  } else if (engineArmed) {
     const c = chip('dc-chip-engine', `${icons.warn}<span>Engine edits: all games</span><button type="button" aria-label="Turn off engine edits">${icons.close}</button>`, 'This prompt may change the shared engine');
     c.querySelector('button').addEventListener('click', () => setEngine(false));
   }
@@ -567,6 +605,7 @@ window.addEventListener('unhandledrejection', (e) => {
   reportError(r?.stack || String(r));
 });
 if (import.meta.hot) {
+  import.meta.hot.on('harness:settings', applySettings);
   import.meta.hot.on('vite:error', ({ err }) => {
     reportError(`${err.message}${err.id ? `\n  in ${err.id}` : ''}${err.frame ? `\n${err.frame}` : ''}`);
   });

@@ -1,7 +1,7 @@
 // World Studio dev server plugin (dev only). It adds:
 // - a projects API (games/<slug>/, created from templates/<name>/)
 // - a per-project chat that runs Claude Code headless, with edits locked to that game's folder
-//   (plus engine/ in Engine mode)
+//   (plus engine/ for one prompt, or for every prompt with the "always allow engine edits" setting)
 // - checkpoints before every prompt, with restore
 // - scoped reloads: an edit to a game reloads only tabs playing that game; engine edits reload all
 // - screenshot, thumbnail and tweak saving
@@ -34,8 +34,8 @@ function systemPrompt(slug, meta, engine) {
   return `You are live-editing the game "${meta.name || slug}" in World Studio, a harness where every game runs on one shared Three.js engine and the user builds by prompting while the game runs.
 
 - This game's code is in games/${slug}/. ${engine
-    ? 'Engine edits are allowed for this prompt: you may also edit engine/. Engine changes affect every game in games/, so keep them backwards compatible and mention what you changed there.'
-    : 'You can only edit files inside games/' + slug + '/. The shared engine (engine/) is read-only unless the user chooses "Allow engine edits" in the chat menu; if a request truly needs an engine change, say so instead of working around it badly.'}
+    ? 'Engine edits are allowed: you may also edit engine/. Engine changes affect every game in games/, so keep them backwards compatible and mention what you changed there. Put game-specific behavior in the game folder, and change the engine only for things the engine should do for every game.'
+    : 'You can only edit files inside games/' + slug + '/. The shared engine (engine/) is read-only unless the user allows engine edits in the chat\'s ⋯ menu; if a request truly needs an engine change, say so instead of working around it badly.'}
 - Read engine/API.md before your first change in a conversation. It documents the game contract (defineGame, setup(ctx), the returned world/update/snapshot/restore), the build-mode hooks and the engine helpers.
 - Expose tunable numbers and colors with ctx.tweaks.add so the user can adjust them live in build mode.
 - Register new clickable objects with ctx.select.add (or addProvider for moving things) so point-and-prompt works on them.
@@ -60,6 +60,11 @@ export default function harness() {
   const rel = (p) => (p ? path.relative(root, p) || p : '');
   const hot = () => server.environments?.client?.hot || server.hot;
   const sendEvent = (event, data) => hot().send({ type: 'custom', event, data });
+  // Studio-wide settings, shared by every project and by every server on this checkout
+  // (browser dev server and desktop app), so they live in .harness/ and are read fresh each time.
+  const SETTINGS_DEFAULTS = { alwaysEngine: false };
+  const settingsFile = () => path.join(P.data, 'settings.json');
+  const settings = () => ({ ...SETTINGS_DEFAULTS, ...readJSON(settingsFile(), {}) });
 
   // ---------- chat state ----------
   function chat(slug) {
@@ -171,6 +176,7 @@ export default function harness() {
   // ---------- Claude runs ----------
   function run(slug, prompt, { display, engine = false } = {}) {
     const c = chat(slug);
+    engine = engine || settings().alwaysEngine;
     const meta = readJSON(path.join(gameDir(slug), 'game.json'), {});
     checkpoint(slug, { prompt: display || prompt, engine });
     push(c, 'user', display || prompt, { engine });
@@ -215,7 +221,7 @@ export default function harness() {
           const tools = [...new Set(denials.filter((d) => !d.tool_input?.file_path).map((d) => d.tool_name))];
           if (files.length) {
             const engineFiles = files.some((f) => f.startsWith('engine'));
-            push(c, 'status', `Blocked edits outside this game: ${files.join(', ')}.${engineFiles && !engine ? ' To allow changes to the shared engine, choose "Allow engine edits" in the ⋯ menu.' : ''}`);
+            push(c, 'status', `Blocked edits outside this game: ${files.join(', ')}.${engineFiles && !engine ? ' To allow changes to the shared engine, choose "Allow engine edits" (next prompt) or "Always allow engine edits" in the ⋯ menu.' : ''}`);
           }
           if (tools.length) push(c, 'status', `Tried tools the harness doesn't allow here (${tools.join(', ')}). Only reading, searching and editing this game's files and running npx vite build are allowed.`);
           if (msg.is_error || msg.subtype !== 'success') push(c, 'error', msg.result || `Stopped (${msg.subtype})`);
@@ -354,6 +360,17 @@ export default function harness() {
       }
     }
     try {
+      // /settings
+      if (parts[0] === 'settings' && parts.length === 1) {
+        if (req.method === 'GET') return json(res, 200, settings());
+        if (req.method === 'POST') {
+          const next = settings();
+          if ('alwaysEngine' in body) next.alwaysEngine = !!body.alwaysEngine;
+          writeJSON(settingsFile(), next);
+          sendEvent('harness:settings', next);
+          return json(res, 200, next);
+        }
+      }
       // /projects
       if (parts[0] === 'projects') {
         if (req.method === 'GET' && parts.length === 1) return json(res, 200, listProjects());

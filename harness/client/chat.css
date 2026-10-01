@@ -47,11 +47,12 @@
   font-family: var(--ws-font); text-transform: none; letter-spacing: 0; color: var(--ws-ink); background: none; border: 0; box-shadow: none; cursor: pointer;
 }
 .dc-menu button:hover { background: var(--ws-panel-3); box-shadow: none; }
+.dc-menu button[hidden] { display: none; }
 .dc-menu button svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--ws-dim); }
 .dc-menu b { display: block; font-size: 13.5px; font-weight: 600; }
 .dc-menu small { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--ws-dim); }
-.dc-menu-engine[aria-checked='true'] { background: var(--ws-danger-soft); }
-.dc-menu-engine[aria-checked='true'] svg { color: var(--ws-danger); }
+.dc-menu-engine[aria-checked='true'], .dc-menu-always[aria-checked='true'] { background: var(--ws-danger-soft); }
+.dc-menu-engine[aria-checked='true'] svg, .dc-menu-always[aria-checked='true'] svg { color: var(--ws-danger); }
 
 /* log */
 .dc-log, .dc-history { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; user-select: text; }
