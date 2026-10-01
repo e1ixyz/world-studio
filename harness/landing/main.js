@@ -36,7 +36,7 @@ root.innerHTML = `
       <div>
         <div class="kicker">World Studio</div>
         <h1>Build worlds <span>live</span></h1>
-        <p class="lede">Every project is its own game on the same engine. Open one, press Tab for build mode, click anything and tell Claude what to change. The game updates where you stand.</p>
+        <p class="lede">Every project is its own game on the same engine. Open one, press Tab for build mode, click anything and describe what to change. The game updates where you stand.</p>
       </div>
       ${DEV ? '<button class="primary" id="new">New project</button>' : ''}
     </header>
@@ -60,7 +60,7 @@ async function render() {
     card.className = 'card';
     card.href = playUrl(p.slug);
     card.innerHTML = `
-      <div class="thumb">${p.thumb ? `<img src="${p.thumb}" alt="">` : `<div class="ph">${esc(initials)}</div>`}${p.running ? '<span class="badge">Claude working</span>' : ''}</div>
+      <div class="thumb">${p.thumb ? `<img src="${p.thumb}" alt="">` : `<div class="ph">${esc(initials)}</div>`}${p.running ? '<span class="badge">Working</span>' : ''}</div>
       <div class="meta">
         <div class="name">${esc(p.name)}</div>
         <div class="sub">${esc(p.template || 'custom')}${p.updated ? ` · edited ${ago(p.updated)}` : ''}</div>
@@ -112,7 +112,7 @@ async function openCreate() {
   let chosen = templates.find((t) => t.id === 'blank')?.id || templates[0]?.id;
   const o = dialog(`
     <h2>New project</h2>
-    <p class="help">Pick a starting point. If you describe the game, Claude builds a first version while it loads.</p>
+    <p class="help">Pick a starting point. If you describe the game, a first version is built while it loads.</p>
     <label class="field"><span>Name</span><input id="n" placeholder="e.g. Sky Islands" maxlength="60"></label>
     <div class="field"><span>Template</span><div class="templates">${templates.map((t) => `
       <button type="button" class="tpl${t.id === chosen ? ' on' : ''}" data-id="${esc(t.id)}"><b>${esc(t.name)}</b><small>${esc(t.description || '')}</small></button>`).join('')}</div></div>
@@ -164,7 +164,7 @@ async function action(a, p) {
     o.querySelector('#cancel').addEventListener('click', () => o.remove());
   }
   if (a === 'delete') {
-    const o = dialog(`<h2>Delete “${esc(p.name)}”?</h2><p class="help">The project folder moves to <code>.harness/trash/</code>, so you can still recover it by moving it back into <code>games/</code>.</p>
+    const o = dialog(`<h2>Delete “${esc(p.name)}”?</h2><p class="help">The project and its chat move to <code>.harness/trash/</code>, so you can still recover it from there.</p>
       <p class="err" hidden></p>
       <div class="row"><button class="ghost" id="cancel">Cancel</button><button class="danger" id="go">Delete</button></div>`);
     o.querySelector('#cancel').addEventListener('click', () => o.remove());

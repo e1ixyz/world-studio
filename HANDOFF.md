@@ -16,7 +16,7 @@ Verified in the browser with Playwright on 2026-09-30:
 - Creating a project from Blank opens it in build mode.
 - Meridian plays as before: walking, the HUD objective, 60 FPS headless.
 - Tab enters build mode. Clicking a building selects it, and the selection card and selection text are correct.
-- Build mode UI redesign (same day): top bar, Properties panel, Claude panel with collapsed steps and a working card were checked in the browser at 1280x720 and 1440x900, including one real prompt and a checkpoint undo view. The pause-menu Resume fix could not be exercised end to end because headless Chromium has no pointer lock.
+- Build mode UI redesign (same day): top bar, Properties panel, Ask panel with collapsed steps and a working card were checked in the browser at 1280x720 and 1440x900, including one real prompt and a checkpoint undo view. The pause-menu Resume fix could not be exercised end to end because headless Chromium has no pointer lock.
 - Tweak changes apply live, and Save writes `tweaks.json`.
 - Screenshot and thumbnail files get written. Test from here works.
 - A real prompt on a test project edited only that game's folder, created a checkpoint and reloaded only that project's tab. A second tab open on Meridian did not reload.
@@ -114,7 +114,7 @@ Templates are copied, never linked. See Gotchas.
 - `projects/<slug>/chat.json` - chat log and Claude session id for each project. Meridian's chat history from before the restructure was migrated here.
 - `checkpoints/<slug>/<id>/` - one snapshot per prompt, with `meta.json`.
 - `shots/<slug>/` - screenshots attached to prompts.
-- `trash/` - deleted projects, named `<slug>-<timestamp>`.
+- `trash/` - deleted projects, as `<slug>-<timestamp>/game` plus `/chat` (delete also drops the in-memory chat, so a new project with the same name starts clean).
 - `backup-pre-harness.tar.gz` - the project as it was before the restructure.
 
 ## How a game plugs in
@@ -196,7 +196,7 @@ Each prompt is a real Claude Code run billed to the user's account. A tiny edit 
 ## Chat client: `harness/client/chat.js`
 
 - `transformIndexHtml` injects it only into play pages, with `head-prepend` (`harness/server/plugin.js:463`). It loads before the game and keeps working when the game crashes.
-- Backtick toggles the Claude panel. The "Claude" tab on the right edge does too. The panel has Chat and Checkpoints tabs and a ⋯ menu.
+- Backtick toggles the Ask panel. The "Ask" tab on the right edge does too. The panel has Chat and Checkpoints tabs and a ⋯ menu.
 - Enter in play or build mode opens a one-line quick prompt bar and keeps pointer lock.
 - A status pill in the bottom-left shows progress while the panel is closed.
 - The panel opens by itself when you enter build mode and closes when you leave (`engine/runtime.js:151`, `engine/runtime.js:163`).
@@ -209,7 +209,7 @@ Each prompt is a real Claude Code run billed to the user's account. A tiny edit 
 - Each turn's tool calls collapse into one "N steps" row. Earlier messages in a turn are dimmed as progress notes. While Claude works, a card above the composer shows the latest step, the elapsed time and Stop, and Send is disabled.
 - The Checkpoints tab has "Undo last prompt", then every checkpoint newest first, each with Restore.
 - An empty chat shows three example prompts; one adapts to the selected object's kind.
-- Window errors, unhandled rejections, failed script loads and `vite:error` show as error cards with an "Ask Claude to fix" button, and the panel opens by itself (`harness/client/chat.js:415`).
+- Window errors, unhandled rejections, failed script loads and `vite:error` show as error cards with an "Fix it" button, and the panel opens by itself (`harness/client/chat.js:415`).
 - Game controls pause only while a chat text box has focus. The client dispatches `devchat:focus` / `devchat:blur`, and the runtime and `Input` drop held keys.
 
 ## Landing page: `harness/landing/main.js`
@@ -224,11 +224,11 @@ Each prompt is a real Claude Code run billed to the user's account. A tiny edit 
 
 - Tab toggles between play and build. The start menu has Play and Build mode buttons, and `?build=1` opens straight into build mode (`engine/runtime.js:409`).
 - Free camera, separate from the player: right-drag looks, WASD moves, Q/E go down/up, Shift is fast, the wheel changes speed.
-- Layout: a top bar, a Properties panel on the left (collapsible to a small button) and the Claude panel on the right. Shared colors, buttons and sizes are in `engine/ui/tokens.css`; icons are inline SVG in `engine/build/icons.js`. Cyan marks actions and active state, yellow marks the selection only, coral marks errors and engine edits.
+- Layout: a top bar, a Properties panel on the left (collapsible to a small button) and the Ask panel on the right. Shared colors, buttons and sizes are in `engine/ui/tokens.css`; icons are inline SVG in `engine/build/icons.js`. Cyan marks actions and active state, yellow marks the selection only, coral marks errors and engine edits.
 - Top bar: "Projects" link, project name, a Play | Build switch, a time-of-day slider, "Pause world" / "Resume world", "Attach view" (K), "Test from here" (P) and a shortcuts button. Labels drop to icons on narrower windows.
 - Pause is on by default in build mode. It pauses `game.update` and the clock.
-- Hovering outlines what's clickable. Click selects. Picking is a ray against the boxes games register with `ctx.select`, so it works on merged and instanced geometry. The selection gets a yellow box and a floating label with an "Ask Claude" button.
-- Properties: the selection card shows kind, id, 2-3 key props and size, with "More details" (position, remaining props, source file), "Ask Claude about this" (focuses the prompt with the selection attached), Frame (F) and Deselect (Esc).
+- Hovering outlines what's clickable. Click selects. Picking is a ray against the boxes games register with `ctx.select`, so it works on merged and instanced geometry. The selection gets a yellow box and a floating label with an "Ask" button.
+- Properties: the selection card shows kind, id, 2-3 key props and size, with "More details" (position, remaining props, source file), "Ask about this" (focuses the prompt with the selection attached), Frame (F) and Deselect (Esc).
 - Tweaks sit below the selection card: a filter box, the game's groups open, and the engine's World/Player tweaks folded under "Engine settings". A footer shows "N unsaved changes" with Discard and Save (writes `games/<slug>/tweaks.json`). Changed rows show a reset button.
 - A bottom hint lists the camera keys, and "Shortcuts" opens a key reference. A three-step tip card shows the first time you enter build mode (remembered in localStorage).
 - Test from here (P) drops the player at the camera, flying if the camera is more than 4 m up.
@@ -266,6 +266,8 @@ Build mode: right-drag looks, WASD moves, Q/E down/up, Shift fast, wheel changes
 Dev server only: Enter opens the quick prompt bar, backtick toggles the chat panel.
 
 ## Gotchas
+
+- Edit permissions for the agent use absolute paths (`Edit(//<abs>/games/<slug>/**)`). Relative rules resolve against Claude's current directory, so one `cd games/<slug>` in a shell command made the game's own files unwritable (seen on 2026-10-01 in the Meridian penthouse prompt).
 
 - Engine CSS edits go through Vite's normal CSS HMR. The harness doesn't intercept them (`harness/server/plugin.js:476`).
 - Editing `harness/server/plugin.js` or `vite.config.js` restarts the Vite server. Open tabs reload through Vite's own reconnect, with no snapshot guarantee. The chat shows "dev server offline" for a moment.

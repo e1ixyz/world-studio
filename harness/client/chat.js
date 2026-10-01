@@ -27,22 +27,22 @@ const secs = (ms) => (ms < 60000 ? `${Math.round(ms / 1000)}s` : `${Math.floor(m
 
 const root = el('div', 'dc-root');
 root.innerHTML = `
-  <button type="button" class="dc-tab" title="Show Claude (\`)"><span class="dc-tab-dot"></span>Claude <span class="ws-kbd">\`</span></button>
-  <button type="button" class="dc-feed" title="Show Claude"><span class="dc-spin"></span><span class="dc-feed-text"></span></button>
+  <button type="button" class="dc-tab" title="Show Ask (\`)"><span class="dc-tab-dot"></span>Ask <span class="ws-kbd">\`</span></button>
+  <button type="button" class="dc-feed" title="Show Ask"><span class="dc-spin"></span><span class="dc-feed-text"></span></button>
   <form class="dc-quick" autocomplete="off">
-    <span class="dc-quick-label">Claude</span>
+    <span class="dc-quick-label">Ask</span>
     <input type="text" placeholder="Describe a change. Enter sends, Esc cancels." maxlength="4000" aria-label="Quick prompt">
   </form>
-  <aside class="dc-panel" aria-label="Claude">
+  <aside class="dc-panel" aria-label="Ask">
     <header class="dc-head">
       <div class="dc-head-top">
-        <h2>Claude</h2>
+        <h2>Ask</h2>
         <span class="dc-offline">Dev server offline</span>
         <button type="button" class="ws-icon dc-menu-btn" aria-haspopup="menu" aria-label="More">${icons.more}</button>
-        <button type="button" class="ws-icon dc-close" aria-label="Hide Claude" title="Hide (\`)">${icons.close}</button>
+        <button type="button" class="ws-icon dc-close" aria-label="Hide Ask" title="Hide (\`)">${icons.close}</button>
         <div class="dc-menu hidden" role="menu">
           <button type="button" role="menuitemcheckbox" aria-checked="false" class="dc-menu-engine">${icons.warn}<span><b>Allow engine edits</b><small>For the next prompt only. Engine changes affect every game.</small></span></button>
-          <button type="button" role="menuitem" class="dc-menu-new">${icons.plus}<span><b>New conversation</b><small>Claude forgets this chat. Checkpoints stay.</small></span></button>
+          <button type="button" role="menuitem" class="dc-menu-new">${icons.plus}<span><b>New conversation</b><small>Starts fresh without this chat’s history. Checkpoints stay.</small></span></button>
         </div>
       </div>
       <div class="dc-tabs" role="tablist">
@@ -54,7 +54,7 @@ root.innerHTML = `
     <div class="dc-history ws-scroll hidden"></div>
     <div class="dc-working">
       <span class="dc-spin"></span>
-      <div class="dc-working-text"><b>Claude is working</b><span class="dc-working-step"></span></div>
+      <div class="dc-working-text"><b>Working on your change</b><span class="dc-working-step"></span></div>
       <span class="dc-elapsed"></span>
       <button type="button" class="ws-btn sm dc-stop">${icons.stop}<span>Stop</span></button>
     </div>
@@ -322,7 +322,7 @@ function renderChips() {
   const cam = el('button', `dc-chip dc-chip-toggle${cameraContext ? ' on' : ''}`, `${icons.pin}<span>${gameState() === 'build' ? 'Camera view' : 'My position'}</span>`);
   cam.type = 'button';
   cam.setAttribute('aria-pressed', String(cameraContext));
-  cam.title = cameraContext ? 'Claude gets where you are and which way you face. Click to leave it out.' : 'Click to tell Claude where you are and which way you face';
+  cam.title = cameraContext ? 'Includes where you are and which way you face. Click to leave it out.' : 'Click to include where you are and which way you face';
   cam.addEventListener('click', () => {
     cameraContext = !cameraContext;
     try { localStorage.setItem(CAM_KEY, cameraContext ? '1' : '0'); } catch { /* ignore */ }
@@ -330,7 +330,7 @@ function renderChips() {
   });
   chipsEl.appendChild(cam);
   if (sel) {
-    const c = chip('dc-chip-sel', `${icons.target}<span><b>Selected</b> ${esc(selName)}</span><button type="button" aria-label="Leave out the selection">${icons.close}</button>`, 'Claude gets this object, its properties and where its code lives');
+    const c = chip('dc-chip-sel', `${icons.target}<span><b>Selected</b> ${esc(selName)}</span><button type="button" aria-label="Leave out the selection">${icons.close}</button>`, 'Includes this object, its properties and where its code lives');
     c.querySelector('button').addEventListener('click', () => {
       dismissedSel = sel;
       renderChips();
@@ -344,7 +344,7 @@ function renderChips() {
     });
   }
   if (engineArmed) {
-    const c = chip('dc-chip-engine', `${icons.warn}<span>Engine edits: all games</span><button type="button" aria-label="Turn off engine edits">${icons.close}</button>`, 'Claude may change the shared engine for this prompt');
+    const c = chip('dc-chip-engine', `${icons.warn}<span>Engine edits: all games</span><button type="button" aria-label="Turn off engine edits">${icons.close}</button>`, 'This prompt may change the shared engine');
     c.querySelector('button').addEventListener('click', () => setEngine(false));
   }
   if (!attachments.shot && window.__harness?.screenshot) {
@@ -373,8 +373,8 @@ function renderEmpty() {
     'Add a collectible and a counter for how many I’ve found',
   ];
   const intro = el('div', 'dc-intro', `
-    <p>Describe a change and Claude edits this game’s code. The game reloads where you are.</p>
-    <p class="dc-intro-tip">Tip: in build mode, click something in the world first. Claude gets that object and where its code lives.</p>
+    <p>Describe a change and this game’s code is edited for you. The game reloads where you are.</p>
+    <p class="dc-intro-tip">Tip: in build mode, click something in the world first. The prompt then includes that object and where its code lives.</p>
     <div class="dc-ideas">${ideas.map((t) => `<button type="button" class="dc-idea">${esc(t)}</button>`).join('')}</div>`);
   intro.querySelectorAll('.dc-idea').forEach((b) => b.addEventListener('click', () => {
     input.value = b.textContent;
@@ -448,7 +448,7 @@ function addItem(item) {
 function errorCard(text, fixable) {
   const n = el('div', 'dc-error', `<div class="dc-error-title">${icons.warn}<span>Error</span></div><pre>${esc(text)}</pre>`);
   if (fixable) {
-    const b = el('button', 'ws-btn sm danger dc-fix', 'Ask Claude to fix it');
+    const b = el('button', 'ws-btn sm danger dc-fix', 'Fix it');
     b.type = 'button';
     b.addEventListener('click', async () => {
       b.disabled = true;
@@ -471,7 +471,7 @@ async function loadHistory() {
     list = await (await fetch(`${API}/checkpoints`)).json();
   } catch { /* offline */ }
   if (!list.length) {
-    historyEl.innerHTML = '<p class="dc-hint">No checkpoints yet. One is saved before every prompt, so any change Claude makes can be undone.</p>';
+    historyEl.innerHTML = '<p class="dc-hint">No checkpoints yet. One is saved before every prompt, so any change can be undone.</p>';
     return;
   }
   historyEl.innerHTML = '';
@@ -519,7 +519,7 @@ function setRunning(on, since) {
   startedAt = since || Date.now();
   root.classList.toggle('running', on);
   sendBtn.disabled = on;
-  sendBtn.title = on ? 'Wait for Claude to finish, or press Stop' : '';
+  sendBtn.title = on ? 'Wait for the current change to finish, or press Stop' : '';
   if (on && !stepEl.textContent) stepEl.textContent = 'Reading the game…';
   if (!on) stepEl.textContent = '';
   if (!on && tab === 'history') loadHistory();

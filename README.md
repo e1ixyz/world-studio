@@ -21,19 +21,19 @@ The chat needs the `claude` CLI installed and logged in.
 
 The landing page lists your projects. Click a card to play, or use New project to start one from a template. If you describe the game in the New project dialog, Claude builds a first version as its opening prompt, and the project opens in build mode.
 
-Each card also has Build, Duplicate, Rename and Delete. Delete moves the project to `.harness/trash/`, so you can get it back by moving the folder into `games/`.
+Each card also has Build, Duplicate, Rename and Delete. Delete moves the project (and its chat) to `.harness/trash/`, so you can get it back by moving its `game` folder into `games/`.
 
 Inside a game:
 
 - Play it like a normal game. The start menu has Play and Build mode buttons.
 - Press Tab for build mode. You get a free camera, and the world is paused by default ("Resume world" in the top bar runs it) so you can look at things while they hold still. The top bar also has a time-of-day slider.
-- Press backtick to open the Claude panel, or Enter for a one-line prompt bar that keeps you in the game. Each prompt runs Claude Code on this project only.
-- Point and prompt: in build mode, hover to see what's clickable and click an object. The Properties panel shows what it is, and "Ask Claude about this" attaches it to your next prompt. "Attach view" (K) adds a screenshot of what you see.
+- Press backtick to open the Ask panel, or Enter for a one-line prompt bar that keeps you in the game. Each prompt runs Claude Code on this project only.
+- Point and prompt: in build mode, hover to see what's clickable and click an object. The Properties panel shows what it is, and "Ask about this" attaches it to your next prompt. "Attach view" (K) adds a screenshot of what you see.
 - Tweaks: under the selection in the Properties panel are the sliders, colors and toggles the game exposes, with the engine's world and player settings folded under "Engine settings". Changes apply live. Save writes them to the game's `tweaks.json`; Discard undoes unsaved changes.
-- Checkpoints: one is saved before every prompt. Open the Checkpoints tab in the Claude panel and use "Undo last prompt" or Restore. Restoring saves a checkpoint first, so a restore can be undone too.
-- Engine edits: by default Claude can edit only this game's folder. Choose "Allow engine edits" in the Claude panel's ⋯ menu to let it change the shared engine for one prompt. Engine changes affect every game.
+- Checkpoints: one is saved before every prompt. Open the Checkpoints tab in the Ask panel and use "Undo last prompt" or Restore. Restoring saves a checkpoint first, so a restore can be undone too.
+- Engine edits: by default Claude can edit only this game's folder. Choose "Allow engine edits" in the Ask panel's ⋯ menu to let it change the shared engine for one prompt. Engine changes affect every game.
 
-When a runtime error shows up, the chat shows it with an "Ask Claude to fix" button.
+When a runtime error shows up, the chat shows it with an "Fix it" button.
 
 ## Included games and templates
 

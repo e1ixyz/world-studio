@@ -174,8 +174,11 @@ export default function harness() {
     const meta = readJSON(path.join(gameDir(slug), 'game.json'), {});
     checkpoint(slug, { prompt: display || prompt, engine });
     push(c, 'user', display || prompt, { engine });
-    const tools = [...BASE_TOOLS, `Edit(games/${slug}/**)`, `Write(games/${slug}/**)`];
-    if (engine) tools.push('Edit(engine/**)', 'Write(engine/**)');
+    // Absolute paths ("//abs/**"): relative rules resolve against Claude's current directory,
+    // so a `cd` in a shell command would otherwise make the game's own files unwritable.
+    const allow = (dir) => [`Edit(/${dir}/**)`, `Write(/${dir}/**)`];
+    const tools = [...BASE_TOOLS, ...allow(gameDir(slug))];
+    if (engine) tools.push(...allow(P.engine));
     const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--permission-mode', 'default',
       '--allowedTools', ...tools, '--append-system-prompt', systemPrompt(slug, meta, engine)];
     if (c.sessionId) args.push('--resume', c.sessionId);
@@ -212,10 +215,10 @@ export default function harness() {
           const tools = [...new Set(denials.filter((d) => !d.tool_input?.file_path).map((d) => d.tool_name))];
           if (files.length) {
             const engineFiles = files.some((f) => f.startsWith('engine'));
-            push(c, 'status', `Blocked edits outside this game: ${files.join(', ')}.${engineFiles && !engine ? ' To let Claude change the shared engine, choose "Allow engine edits" in the ⋯ menu.' : ''}`);
+            push(c, 'status', `Blocked edits outside this game: ${files.join(', ')}.${engineFiles && !engine ? ' To allow changes to the shared engine, choose "Allow engine edits" in the ⋯ menu.' : ''}`);
           }
-          if (tools.length) push(c, 'status', `Claude tried tools the harness doesn't allow here (${tools.join(', ')}). It can read, search and edit this game's files and run npx vite build.`);
-          if (msg.is_error || msg.subtype !== 'success') push(c, 'error', msg.result || `Claude stopped (${msg.subtype})`);
+          if (tools.length) push(c, 'status', `Tried tools the harness doesn't allow here (${tools.join(', ')}). Only reading, searching and editing this game's files and running npx vite build are allowed.`);
+          if (msg.is_error || msg.subtype !== 'success') push(c, 'error', msg.result || `Stopped (${msg.subtype})`);
           push(c, 'done', '', { ms: msg.duration_ms, cost: msg.total_cost_usd });
         }
       }
@@ -225,14 +228,14 @@ export default function harness() {
     });
     child.on('error', (err) => {
       push(c, 'error', err.code === 'ENOENT'
-        ? 'Could not find the `claude` CLI. Install Claude Code and log in, or set DEVCHAT_CLAUDE to its path.'
-        : `Failed to start Claude: ${err.message}`);
+        ? 'Couldn’t find the `claude` command-line tool. Install it and log in, or set DEVCHAT_CLAUDE to its path.'
+        : `Failed to start: ${err.message}`);
     });
     child.on('close', (code, signal) => {
       const j = c.job;
       c.job = null;
       if (signal) push(c, 'status', 'Stopped. Open Checkpoints to undo any partial edits.');
-      else if (code !== 0 && !j.gotResult) push(c, 'error', j.stderr.trim().split('\n').slice(-6).join('\n') || `Claude exited with code ${code}`);
+      else if (code !== 0 && !j.gotResult) push(c, 'error', j.stderr.trim().split('\n').slice(-6).join('\n') || `Exited with code ${code}`);
       const gj = path.join(gameDir(slug), 'game.json');
       if (fs.existsSync(gj)) writeJSON(gj, { ...readJSON(gj, {}), updated: Date.now() });
       saveChat(c);
@@ -373,9 +376,15 @@ export default function harness() {
           return json(res, 200, { slug: copy });
         }
         if (parts[2] === 'delete') {
-          if (chat(slug).job) return json(res, 409, { error: 'Claude is working on this project' });
-          fs.mkdirSync(path.join(P.data, 'trash'), { recursive: true });
-          fs.renameSync(gameDir(slug), path.join(P.data, 'trash', `${slug}-${Date.now()}`));
+          if (chat(slug).job) return json(res, 409, { error: 'A change is still running on this project' });
+          const dest = path.join(P.data, 'trash', `${slug}-${Date.now()}`);
+          fs.mkdirSync(dest, { recursive: true });
+          fs.renameSync(gameDir(slug), path.join(dest, 'game'));
+          // the chat goes with it, so a new project with the same name starts clean
+          const chatDir = path.join(P.data, 'projects', slug);
+          if (fs.existsSync(chatDir)) fs.renameSync(chatDir, path.join(dest, 'chat'));
+          for (const r of chat(slug).clients) r.end();
+          chats.delete(slug);
           sendEvent('harness:projects', {});
           return json(res, 200, { ok: true });
         }
@@ -404,7 +413,7 @@ export default function harness() {
         if (req.method === 'POST' && parts[2] === 'prompt') {
           const text = String(body.text || '').trim();
           if (!text) return json(res, 400, { error: 'empty prompt' });
-          if (c.job) return json(res, 409, { error: 'Claude is still working on the last request' });
+          if (c.job) return json(res, 409, { error: 'Still working on the last request' });
           run(slug, text, { display: String(body.display || text), engine: !!body.engine });
           return json(res, 200, { ok: true });
         }
@@ -421,7 +430,7 @@ export default function harness() {
           return json(res, 200, { ok: true });
         }
         if (req.method === 'POST' && parts[2] === 'restore') {
-          if (c.job) return json(res, 409, { error: 'Wait for Claude to finish first' });
+          if (c.job) return json(res, 409, { error: 'Wait for the current change to finish first' });
           restoreCheckpoint(slug, String(body.id || ''));
           return json(res, 200, { ok: true });
         }

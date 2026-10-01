@@ -419,7 +419,7 @@ async function main() {
 
 function fail(hud, err, title) {
   console.error(err);
-  hud.fatal(title, `<code>${String(err.message || err).replace(/</g, '&lt;')}</code><br>Open the chat with <kbd>\`</kbd> and ask Claude to fix it.`);
+  hud.fatal(title, `<code>${String(err.message || err).replace(/</g, '&lt;')}</code><br>Open the Ask panel with <kbd>\`</kbd> and ask for a fix.`);
   window.devchat?.reportError?.(err.stack || String(err));
 }
 

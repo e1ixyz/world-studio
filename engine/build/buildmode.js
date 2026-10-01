@@ -101,7 +101,7 @@ export class BuildMode {
       </aside>
       <button type="button" class="ws-rail" title="Show properties" aria-label="Show properties panel">${icons.sliders}</button>
 
-      <div class="ws-tag" aria-live="polite"><span class="ws-tag-name"></span><button type="button" class="ws-btn sm select ws-tag-ask">Ask Claude</button></div>
+      <div class="ws-tag" aria-live="polite"><span class="ws-tag-name"></span><button type="button" class="ws-btn sm select ws-tag-ask">Ask</button></div>
 
       <div class="ws-hint">
         <span><b>WASD</b> fly</span><span><b>Right-drag</b> look</span><span><b>Q / E</b> down / up</span><span><b>Shift</b> faster</span><span><b>Scroll</b> speed</span>
@@ -128,7 +128,7 @@ export class BuildMode {
           <div class="ws-sheet-col">
             <p class="ws-sheet-title">Anywhere</p>
             <div><span class="k"><span class="ws-kbd">Tab</span></span><span class="v">Switch Play / Build</span></div>
-            <div><span class="k"><span class="ws-kbd">\`</span></span><span class="v">Show / hide Claude</span></div>
+            <div><span class="k"><span class="ws-kbd">\`</span></span><span class="v">Show / hide Ask</span></div>
             <div><span class="k"><span class="ws-kbd">N</span></span><span class="v">Jump day / night</span></div>
             <div><span class="k"><span class="ws-kbd">G</span></span><span class="v">Graphics quality</span></div>
             <p class="ws-sheet-title">Play mode</p>
@@ -144,7 +144,7 @@ export class BuildMode {
         <ol>
           <li><b>Fly around</b> with WASD and right-drag to look.</li>
           <li><b>Click anything</b> in the world to select it. Tweaks on the left change it live.</li>
-          <li><b>Tell Claude</b> what to change on the right. The game reloads where you are.</li>
+          <li><b>Ask for a change</b> on the right. The game reloads where you are.</li>
         </ol>
         <button type="button" class="ws-btn sm primary ws-tips-ok">Got it</button>
       </div>`;
@@ -374,7 +374,7 @@ export class BuildMode {
     const box = this.el.sel;
     if (!e) {
       box.className = 'ws-sel empty';
-      box.innerHTML = `${icons.target}<p>Click anything in the world to select it, then ask Claude to change it.</p>`;
+      box.innerHTML = `${icons.target}<p>Click anything in the world to select it, then ask for a change.</p>`;
       return;
     }
     const c = e.box.getCenter(new THREE.Vector3());
@@ -390,7 +390,7 @@ export class BuildMode {
       <details class="ws-more"><summary>${icons.chevron}More details</summary>
         <dl class="ws-props-list">${rest.map(row).join('')}<div><dt>position</dt><dd>${c.x.toFixed(1)}, ${c.y.toFixed(1)}, ${c.z.toFixed(1)}</dd></div>${e.source ? `<div><dt>code</dt><dd class="ws-src">${esc(e.source)}</dd></div>` : ''}</dl>
       </details>
-      <button type="button" class="ws-btn select ws-ask">Ask Claude about this</button>
+      <button type="button" class="ws-btn select ws-ask">Ask about this</button>
       <div class="ws-sel-row">
         <button type="button" class="ws-btn sm ws-frame">${icons.frame}<span>Frame</span><span class="ws-kbd">F</span></button>
         <button type="button" class="ws-btn sm quiet ws-clear"><span>Deselect</span><span class="ws-kbd">Esc</span></button>
@@ -410,7 +410,7 @@ export class BuildMode {
     if (this.tweakSig !== sig) {
       this.tweakSig = sig;
       list.innerHTML = '';
-      if (!own.size) list.insertAdjacentHTML('beforeend', '<p class="ws-empty">This game has no tweaks of its own yet. Ask Claude to “add tweaks for …” and they show up here.</p>');
+      if (!own.size) list.insertAdjacentHTML('beforeend', '<p class="ws-empty">This game has no tweaks of its own yet. Ask to “add tweaks for …” and they show up here.</p>');
       for (const [group, defs] of own) list.appendChild(this.tweakGroup(group, defs, true));
       if (engine.size) {
         const eng = document.createElement('details');
