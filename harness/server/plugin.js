@@ -472,6 +472,10 @@ export default function harness() {
     },
     configureServer(s) {
       server = s;
+      // don't leave agent runs behind when the server shuts down (e.g. the desktop app quits)
+      s.httpServer?.once('close', () => {
+        for (const c of chats.values()) c.job?.child.kill('SIGTERM');
+      });
       // /play/<slug> serves the game runtime
       s.middlewares.use((req, res, next) => {
         const m = req.url.match(/^\/play\/([\w-]+)\/?(\?.*)?$/);

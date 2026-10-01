@@ -15,6 +15,16 @@ Open the URL Vite prints. The configured port is 5173, but Vite moves to the nex
 
 The chat needs the `claude` CLI installed and logged in.
 
+### Desktop app (macOS)
+
+```sh
+npm run app:install
+```
+
+This builds `World Studio.app`, installs it in `~/Applications` and puts a link on the Desktop. Double-click it and the studio opens in its own window. It runs the same Vite server and harness as `npm run dev`, but in the app's own process on port 5199, so it can run alongside a terminal dev server. The app points at this checkout: games, chats and checkpoints stay in this folder. Rebuild it only after changing `desktop/main.js` or the icon. `npm run app` runs it from source without packaging.
+
+Logs go to `~/Library/Logs/World Studio/main.log`.
+
 `npm run build` makes a production build in `dist/`, and `npm run preview` serves it. The production build plays the games but has no chat, no project editing and no saving.
 
 ## How to use it

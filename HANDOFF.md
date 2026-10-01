@@ -1,12 +1,12 @@
 # World Studio - Handoff
 
-Last updated 2026-09-30.
+Last updated 2026-10-01.
 
 World Studio is a harness for building browser 3D games with Claude while they run. Every game lives in its own folder under `games/` and runs on one shared Three.js engine in `engine/`. A landing page lists the projects. Inside a game you can play it, or press Tab for build mode, click an object and tell Claude what to change. Claude edits only that game's folder, and the tab reloads in place with your position and progress kept.
 
 Until today (2026-09-30) this repo was a single game, Meridian City. It was restructured into World Studio the same day, and Meridian now lives in `games/meridian-city/` as the first game on the engine contract. Three.js 0.186 and Vite 8, plain JS ES modules, no framework, no asset files. User-facing overview and controls are in [README.md](README.md). The engine contract for games is [engine/API.md](engine/API.md); this file links to it rather than repeating it.
 
-The project is not a git repo. A backup of the pre-restructure project is at `.harness/backup-pre-harness.tar.gz`.
+The repo is private on GitHub at `e1ixyz/world-studio`. The macOS desktop app lives on the `electron-app` branch (see Desktop app below). A backup of the pre-restructure project is at `.harness/backup-pre-harness.tar.gz`.
 
 ## Current state
 
@@ -53,6 +53,20 @@ npm run preview   # serve dist/
 - Before calling a change done: `npx vite build` must compile, and the game must load and play in a browser.
 - `window.__game` (`engine/runtime.js:398`) exposes `app`, `ctx`, `game`, `player`, `env`, `camera`, `select`, `tweaks`, `build`, `input`, `start(mode)`, `setMode(mode)` and a `state` getter. Playwright uses it to drive and inspect games. `window.__harness` (`engine/runtime.js:399`) carries the slug, the game's metadata and the current selection text for the chat client.
 
+## Desktop app: `desktop/`
+
+`npm run app:install` (`desktop/package.mjs`) packages `World Studio.app` with `@electron/packager`, signs it ad hoc, copies it to `~/Applications` and symlinks it onto the Desktop. `npm run app` runs the shell from source. `npm run app:icon` redraws `desktop/icon.icns` and `desktop/icon.png` from `desktop/icon.svg`.
+
+- The app is a thin shell. The bundle holds only `package.json` and `desktop/main.js`. At launch it imports Vite from the checkout's `node_modules` and calls `createServer` on the checkout, so the harness plugin, games, chats and checkpoints are the same ones `npm run dev` uses. Changes to `engine/`, `games/` or `harness/` need no rebuild.
+- The checkout path comes from, in order: `WORLD_STUDIO_ROOT`, `~/Library/Application Support/World Studio/config.json`, `desktop/root.json` (written by the package script, gitignored), then the repo itself when unpackaged. If none of them has `vite.config.js` and `node_modules/vite`, a folder picker asks and saves the answer to `config.json`.
+- Port 5199, not 5173 (`desktop/main.js:10`). A terminal dev server and the app can both run, but each has its own harness, so don't prompt the same project from both at once.
+- Finder launches apps with a bare PATH, so `fixPath()` (`desktop/main.js:30`) reads PATH from the login shell (`$SHELL -ilc`) and adds `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`. The resolved `claude` path is written to the log.
+- Logs: `~/Library/Logs/World Studio/main.log` (console output from the main process, including Vite).
+- Quitting closes the Vite server. The plugin now kills running agent jobs when the HTTP server closes (`harness/server/plugin.js:476`), so a quit doesn't leave a `claude` run editing files.
+- Links to other origins open in the default browser. Only one instance runs; opening it again focuses the window.
+
+Verified on 2026-10-01 (macOS, arm64, Electron 44): the installed app launched with `open`, found `claude` at `~/.local/bin/claude`, served the landing page, and Meridian loaded in build mode in the app window. Not verified: a real prompt run from the app, and pointer lock in the app window (needs a person at the keyboard).
+
 ## Layout
 
 ```
@@ -63,6 +77,7 @@ harness/     dev-only tooling: server plugin, in-game chat, landing page
 .harness/    runtime data: chat logs, checkpoints, screenshots, trash (gitignored)
 index.html   landing page shell, loads harness/landing/main.js
 play.html    game page shell, loads engine/runtime.js
+desktop/     Electron shell for the macOS app (electron-app branch)
 ```
 
 ### `engine/`
