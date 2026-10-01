@@ -30,7 +30,7 @@ Check the change against each item.
 8. Permissions. Electron grants camera, microphone, notification and clipboard requests without asking. The browser prompts and can refuse. Handle refusal anyway.
 9. Downloads. An `<a download>` click (production "Attach view") saves straight to Downloads in the browser and opens a save dialog in the app. Both are acceptable. Don't rely on either.
 10. Window size. The app's minimum is 960x600 and has no URL bar, and the window title comes from `document.title`. Layouts have to hold at 960x600.
-11. Lifecycle. Ctrl+C on the terminal server and quitting the app both close Vite's HTTP server. Anything the plugin starts (child processes, timers, watchers) stops on `httpServer` 'close', the same way agent jobs do (`harness/server/plugin.js:476`).
+11. Lifecycle. Ctrl+C on the terminal server and quitting the app both close Vite's HTTP server. Anything the plugin starts (child processes, timers, watchers) stops on `httpServer` 'close', the same way agent jobs do (`harness/server/plugin.js:493`).
 12. Errors. The app has no terminal. Server output goes to `~/Library/Logs/World Studio/main.log`. Errors the user needs to see go to the chat as error cards, not only to the console.
 13. Rebuilds. Changes under `engine/`, `games/`, `harness/` or `templates/` reach the app on its next launch with no rebuild. Changes to `desktop/` reach the installed app only after `npm run app:install`. Changes to the Electron or Vite version in package.json need `npm install` and then `npm run app:install`.
 

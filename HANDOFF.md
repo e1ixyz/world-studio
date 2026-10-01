@@ -51,7 +51,7 @@ npm run app          # run the desktop shell from source
 
 - `vite.config.js:8` sets port 5173. If it's taken, Vite picks the next free port, so use the URL the terminal prints.
 - `vite.config.js` also sets `appType: 'mpa'` with two inputs, `index.html` (landing) and `play.html` (game runtime), turns the HMR error overlay off so it doesn't cover the chat panel, and keeps `.harness/` out of the file watcher.
-- In dev, games open at `/play/<slug>`. The plugin rewrites that URL to `play.html` (`harness/server/plugin.js:456`). In production the landing page links to `play.html?game=<slug>` instead.
+- In dev, games open at `/play/<slug>`. The plugin rewrites that URL to `play.html` (`harness/server/plugin.js:499`). In production the landing page links to `play.html?game=<slug>` instead.
 - Before calling a change done: `npx vite build` must compile, and the game must load and play in a browser.
 - `window.__game` (`engine/runtime.js:398`) exposes `app`, `ctx`, `game`, `player`, `env`, `camera`, `select`, `tweaks`, `build`, `input`, `start(mode)`, `setMode(mode)` and a `state` getter. Playwright uses it to drive and inspect games. `window.__harness` (`engine/runtime.js:399`) carries the slug, the game's metadata and the current selection text for the chat client.
 
@@ -64,7 +64,7 @@ npm run app          # run the desktop shell from source
 - Port 5199, not 5173 (`desktop/main.js:10`). A terminal dev server and the app can both run, but each has its own harness, so don't prompt the same project from both at once.
 - Finder launches apps with a bare PATH and none of the shell's exports, so `fixPath()` (`desktop/main.js:32`) reads the login shell's environment (`$SHELL -ilc 'env -0'`) and copies PATH and any `DEVCHAT_*` variables (`SHELL_VARS`, `desktop/main.js:31`). It also adds `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`. The resolved `claude` path is written to the log. Any other variable the server reads has to be added to `SHELL_VARS`.
 - Logs: `~/Library/Logs/World Studio/main.log` (console output from the main process, including Vite).
-- Quitting closes the Vite server. The plugin now kills running agent jobs when the HTTP server closes (`harness/server/plugin.js:476`), so a quit doesn't leave a `claude` run editing files.
+- Quitting closes the Vite server. The plugin now kills running agent jobs when the HTTP server closes (`harness/server/plugin.js:493`), so a quit doesn't leave a `claude` run editing files.
 - Links to other origins open in the default browser. Only one instance runs; opening it again focuses the window.
 
 - Parity rule: every change has to work in both the browser and the app. `CLAUDE.md` tells Claude to run the project skill `.claude/skills/parity/SKILL.md` before finishing; it lists where the two differ and how to check each side. `.claude/skills/parity/scripts/cdp.mjs` drives the app window over DevTools (`npx electron . --remote-debugging-port=9333`). The in-app agent skips it.
@@ -126,7 +126,7 @@ Templates are copied, never linked. See Gotchas.
 
 ### `harness/`
 
-- `server/plugin.js` - the Vite plugin. Dev only (`apply: 'serve'`, `harness/server/plugin.js:444`).
+- `server/plugin.js` - the Vite plugin. Dev only (`apply: 'serve'`, `harness/server/plugin.js:481`).
 - `client/chat.js`, `client/chat.css` - the in-game chat panel.
 - `landing/main.js`, `landing/landing.css` - the landing page. `landing/registry.prod.js` globs every `game.json` for the production landing page.
 
@@ -157,8 +157,8 @@ The runtime adds its own tweaks after the game's, so the game's show first in th
 All routes sit under `/__harness`.
 
 - `GET /projects` lists projects, newest edit first, with a thumbnail URL and a `running` flag.
-- `POST /projects` creates one from `{ name, template, description }`. It copies `templates/<template>/` into `games/<slug>/` and writes `game.json` (`harness/server/plugin.js:284`). If a description was given, Claude builds it as the project's first prompt.
-- `POST /projects/<slug>/rename`, `/duplicate` and `/delete`. Delete moves the folder to `.harness/trash/` and refuses while Claude is working on that project (`harness/server/plugin.js:364`).
+- `POST /projects` creates one from `{ name, template, description }`. It copies `templates/<template>/` into `games/<slug>/` and writes `game.json` (`harness/server/plugin.js:304`). If a description was given, Claude builds it as the project's first prompt.
+- `POST /projects/<slug>/rename`, `/duplicate` and `/delete`. Delete moves the folder to `.harness/trash/` and refuses while Claude is working on that project (`harness/server/plugin.js:396`).
 - `GET /templates` lists folders in `templates/` that have a `game.js`.
 - `GET /settings` returns the studio settings and `POST /settings` takes `{ alwaysEngine }`. It writes `.harness/settings.json` and sends a `harness:settings` HMR event so open tabs on the same server update (`harness/server/plugin.js:364`).
 - `POST /shot`, `/thumb` and `/tweaks` take `{ slug, ... }`. They write a screenshot to `.harness/shots/<slug>/`, `thumb.jpg`, or `tweaks.json`.
@@ -174,7 +174,7 @@ The server sends two custom HMR events. `harness:projects` tells the landing pag
 
 ### Claude runs
 
-`run()` (`harness/server/plugin.js:170`) spawns the CLI headless in the project root:
+`run()` (`harness/server/plugin.js:177`) spawns the CLI headless in the project root:
 
 ```
 claude -p <prompt> --output-format stream-json --verbose --permission-mode default
@@ -186,30 +186,30 @@ claude -p <prompt> --output-format stream-json --verbose --permission-mode defau
 - Engine edits add `Edit(engine/**)` and `Write(engine/**)`. A prompt gets them when the client sends `engine: true` ("Allow engine edits", one prompt) or when the `alwaysEngine` setting is on. The server checks the setting itself in `run()` (`harness/server/plugin.js:179`), so it also covers a new project's first build from the landing page.
 - `systemPrompt()` (`harness/server/plugin.js:33`) names the game folder, says whether engine edits are allowed, tells Claude to read `engine/API.md`, to expose tweaks and selectables, to keep `snapshot()`/`restore()` current, and not to start servers or tell the user to refresh.
 - Each project keeps its own Claude session and resumes it. The chat's New button clears it.
-- The child gets `WORLD_STUDIO_AGENT=1` (`harness/server/plugin.js:182`). The user's global `~/.claude/hooks/handoff-stop.mjs` exits early when it's set, so these short runs don't trigger the handoff Stop hook.
+- The child gets `WORLD_STUDIO_AGENT=1` (`harness/server/plugin.js:193`). The user's global `~/.claude/hooks/handoff-stop.mjs` exits early when it's set, so these short runs don't trigger the handoff Stop hook.
 - `DEVCHAT_MODEL` adds `--model`, and `DEVCHAT_CLAUDE` sets the CLI path.
-- Path-scoped permissions were checked with a CLI spike: edits outside the allowed folder are denied. Denied paths show up in the chat as a status line, "Blocked outside this game: ..." (`harness/server/plugin.js:208`).
+- Path-scoped permissions were checked with a CLI spike: edits outside the allowed folder are denied. Denied paths show up in the chat as a status line, "Blocked outside this game: ..." (`harness/server/plugin.js:224`).
 - Stop sends SIGTERM. The chat then says "Stopped. Open Checkpoints to undo any partial edits."
 
 ### Checkpoints
 
-- Before every prompt, `checkpoint()` (`harness/server/plugin.js:106`) copies `games/<slug>/` (minus `thumb.jpg`), plus `engine/` when engine edits are allowed, into `.harness/checkpoints/<slug>/<id>/` with a `meta.json` holding the prompt, the time and the engine flag.
+- Before every prompt, `checkpoint()` (`harness/server/plugin.js:111`) copies `games/<slug>/` (minus `thumb.jpg`), plus `engine/` when engine edits are allowed, into `.harness/checkpoints/<slug>/<id>/` with a `meta.json` holding the prompt, the time and the engine flag.
 - It keeps the newest 30 per project (`harness/server/plugin.js:17`).
-- `restoreCheckpoint()` (`harness/server/plugin.js:124`) first saves a "Before restoring: ..." checkpoint, so a restore can be undone. It then replaces the game folder (and `engine/` if the checkpoint has it), keeps the current thumbnail and reloads the affected tabs.
+- `restoreCheckpoint()` (`harness/server/plugin.js:129`) first saves a "Before restoring: ..." checkpoint, so a restore can be undone. It then replaces the game folder (and `engine/` if the checkpoint has it), keeps the current thumbnail and reloads the affected tabs.
 - Restore refuses while a job is running.
 
 ### Reloads
 
-- The `hotUpdate` hook (`harness/server/plugin.js:469`) takes over reloads for code files in `games/` and `engine/` (`.js`, `.mjs`, `.json`, `.html`, `.glsl`, `.frag`, `.vert`) and returns `[]`, so Vite does no reload of its own.
+- The `hotUpdate` hook (`harness/server/plugin.js:510`) takes over reloads for code files in `games/` and `engine/` (`.js`, `.mjs`, `.json`, `.html`, `.glsl`, `.frag`, `.vert`) and returns `[]`, so Vite does no reload of its own.
 - A changed file in `games/<slug>/` queues a reload for that slug. A changed file in `engine/` queues one for every tab.
-- While any Claude job runs, in any project, queued reloads wait. When the last job ends, `flush()` (`harness/server/plugin.js:152`) invalidates the changed modules, logs a reload line in the chat and sends one `harness:reload` with `{ slugs: [...] }` or `{ all: true }`. With no job running, a change flushes after a 180 ms debounce.
+- While any Claude job runs, in any project, queued reloads wait. When the last job ends, `flush()` (`harness/server/plugin.js:159`) invalidates the changed modules, logs a reload line in the chat and sends one `harness:reload` with `{ slugs: [...] }` or `{ all: true }`. With no job running, a change flushes after a 180 ms debounce.
 - The runtime checks the slug and reloads only matching tabs (`engine/runtime.js:390`).
 - `game.json`, `tweaks.json` and `thumb.jpg` never reload a game. A `game.json` change only refreshes the landing page.
 
 ### Security
 
-- Requests must come from a loopback address (`harness/server/plugin.js:327`).
-- POSTs need the header `X-Devchat: 1` and an `Origin` whose host matches `Host` (`harness/server/plugin.js:332`). This blocks cross-site requests.
+- Requests must come from a loopback address (`harness/server/plugin.js:347`).
+- POSTs need the header `X-Devchat: 1` and an `Origin` whose host matches `Host` (`harness/server/plugin.js:352`). This blocks cross-site requests.
 - The Vite config has no `host: true`, so the dev server isn't reachable from the LAN. Keep it that way: the chat can edit files.
 
 ### Cost
@@ -218,7 +218,7 @@ Each prompt is a real Claude Code run billed to the user's account. A tiny edit 
 
 ## Chat client: `harness/client/chat.js`
 
-- `transformIndexHtml` injects it only into play pages, with `head-prepend` (`harness/server/plugin.js:463`). It loads before the game and keeps working when the game crashes.
+- `transformIndexHtml` injects it only into play pages, with `head-prepend` (`harness/server/plugin.js:506`). It loads before the game and keeps working when the game crashes.
 - Backtick toggles the Ask panel. The "Ask" tab on the right edge does too. The panel has Chat and Checkpoints tabs and a ⋯ menu.
 - Enter in play or build mode opens a one-line quick prompt bar and keeps pointer lock.
 - A status pill in the bottom-left shows progress while the panel is closed.
@@ -293,7 +293,7 @@ Dev server only: Enter opens the quick prompt bar, backtick toggles the chat pan
 
 - Edit permissions for the agent use absolute paths (`Edit(//<abs>/games/<slug>/**)`). Relative rules resolve against Claude's current directory, so one `cd games/<slug>` in a shell command made the game's own files unwritable (seen on 2026-10-01 in the Meridian penthouse prompt).
 
-- Engine CSS edits go through Vite's normal CSS HMR. The harness doesn't intercept them (`harness/server/plugin.js:476`).
+- Engine CSS edits go through Vite's normal CSS HMR. The harness doesn't intercept them (`harness/server/plugin.js:517`).
 - Editing `harness/server/plugin.js` or `vite.config.js` restarts the Vite server. Open tabs reload through Vite's own reconnect, with no snapshot guarantee. The chat shows "dev server offline" for a moment.
 - Editing `templates/` never reloads anything. Templates are copied only when a project is created, so changing a template doesn't change existing games.
 - `games/<slug>/game.json`, `tweaks.json` and `thumb.jpg` changes never reload a game.
