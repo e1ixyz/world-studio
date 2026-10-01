@@ -45,6 +45,8 @@ npm install
 npm run dev       # vite dev server: landing page, games, harness chat
 npm run build     # production build to dist/ (no harness)
 npm run preview   # serve dist/
+npm run app:install  # macOS app: build, install to ~/Applications, link on Desktop
+npm run app          # run the desktop shell from source
 ```
 
 - `vite.config.js:8` sets port 5173. If it's taken, Vite picks the next free port, so use the URL the terminal prints.
@@ -297,5 +299,4 @@ Dev server only: Enter opens the quick prompt bar, backtick toggles the chat pan
 - In the quick prompt bar a typed backtick is sent as text (a lone "`" once went out as a prompt). The panel textarea closes on backtick only when empty.
 - three 0.186 removed `PCFSoftShadowMap`, so the renderer uses `PCFShadowMap`. `THREE.Clock` is deprecated; the loop uses `performance.now()`.
 - Building collider rects carry `tiers` for flight and rooftop landing (`games/meridian-city/city.js:119`). The player controller reads them; cars use only the base footprint.
-- `package.json` still has `"name": "meridian-city"`.
 - Moved folder: the project moved from `~/Desktop/3d-city-site` to `~/Developer/Personal Projects/3d-city-site`. The Desktop folder holds only a `.vite` cache and is safe to delete. Run the dev server from the new path.
