@@ -46,6 +46,8 @@ export function listFiles(dir: string): string[] {
 
 export interface ProjectHooks {
   isRunning(slug: string): boolean;
+  // The project moved to `dest` in the trash; move anything else that belongs to it.
+  trashed?(slug: string, dest: string): void;
   // Files the harness copied in, so the watcher doesn't treat them as edits.
   copied(files: string[]): void;
 }
@@ -161,6 +163,7 @@ export class Projects {
     fs.renameSync(gameDir(this.p, slug), path.join(dest, 'game'));
     const chatDir = path.join(this.p.data, 'projects', slug);
     if (fs.existsSync(chatDir)) fs.renameSync(chatDir, path.join(dest, 'chat'));
+    this.hooks.trashed?.(slug, dest);
     this.events.emit('projects');
   }
 

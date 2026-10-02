@@ -61,7 +61,10 @@ test('a prompt checkpoints, edits, reloads in place, and restore undoes it', asy
     await expect(page.locator('.dc-msg', { hasText: 'make it rain' }).first()).toBeAttached();
     const { body: cps } = await api(page, `/chat/${slug}/checkpoints`);
     expect(cps).toHaveLength(1);
-    expect(cps[0].prompt).toBe('make it rain');
+    expect(cps[0]).toMatchObject({ prompt: 'make it rain', files: 1, additions: 1, deletions: 0 });
+    const { body: diff } = await api(page, `/chat/${slug}/checkpoints/${cps[0].id}/diff`);
+    expect(diff.files).toEqual([{ path: 'game.js', additions: 1, deletions: 0 }]);
+    expect(diff.patch).toContain('+// fake-agent: make it rain');
 
     await markWindow(page);
     expect((await api(page, `/chat/${slug}/restore`, { id: cps[0].id })).status).toBe(200);

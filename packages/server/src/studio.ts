@@ -6,6 +6,7 @@ import { CliRunner } from './domain/agent/cli-runner.ts';
 import { ChatService } from './domain/chat.ts';
 import { JsonChatRepository } from './domain/chat-store.ts';
 import { FsCheckpointStore } from './domain/checkpoints/fs.ts';
+import { GitCheckpointStore, gitAvailable } from './domain/checkpoints/git.ts';
 import type { CheckpointStore } from './domain/checkpoints/store.ts';
 import { StudioEvents } from './domain/events.ts';
 import { relPath, studioPaths } from './domain/paths.ts';
@@ -25,7 +26,8 @@ export function createStudio({ root, runner = new CliRunner(), checkpoints }: St
   const paths = studioPaths(root);
   const events = new StudioEvents();
   const settings = new SettingsStore(paths, events);
-  const store = checkpoints ?? new FsCheckpointStore(paths);
+  // Git history when git is installed; folder copies otherwise.
+  const store: CheckpointStore = checkpoints ?? (gitAvailable() ? new GitCheckpointStore(paths) : new FsCheckpointStore(paths));
   let invalidator: ModuleInvalidator = { invalidateFiles() {}, invalidateAll() {} };
 
   // biome-ignore lint/style/useConst: assigned below, used by the closures before that
@@ -48,6 +50,7 @@ export function createStudio({ root, runner = new CliRunner(), checkpoints }: St
   const projects = new Projects(paths, events, {
     isRunning: (slug) => chats.isRunning(slug),
     copied: (files) => reloads.markFresh(files),
+    trashed: (slug, dest) => store.trash?.(slug, dest),
   });
   chats = new ChatService({
     paths,

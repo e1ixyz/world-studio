@@ -523,11 +523,18 @@ async function loadHistory() {
   for (const cp of list) {
     const row = el('div', 'dc-cp', `
       <div class="dc-cp-text">Before: ${esc(cp.prompt.split('\n')[0])}</div>
-      <div class="dc-cp-meta">${new Date(cp.time).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${cp.engine ? ' · includes engine' : ''}</div>
+      <div class="dc-cp-meta">${new Date(cp.time).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${cp.engine ? ' · includes engine' : ''}${changes(cp)}</div>
       <button type="button" class="ws-btn sm">Restore</button>`);
     row.querySelector('button').addEventListener('click', (e) => restore(cp, e.currentTarget));
     historyEl.appendChild(row);
   }
+}
+// "· 2 files, +14 −3" for checkpoints whose run has finished (git history knows what it changed)
+function changes(cp) {
+  if (cp.files == null) return '';
+  if (!cp.files) return ' · no changes';
+  // non-breaking spaces keep "+14 −3" on one line
+  return ` · ${cp.files}\u00a0file${cp.files === 1 ? '' : 's'}, <span class="dc-cp-delta">+${cp.additions}\u00a0−${cp.deletions}</span>`;
 }
 async function restore(cp, btn) {
   if (!confirm(`Restore the game to before:\n\n“${cp.prompt.split('\n')[0]}”?`)) return;

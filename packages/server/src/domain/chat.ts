@@ -21,6 +21,7 @@ interface Job {
   handle: RunHandle;
   startedAt: number;
   engine: boolean;
+  checkpoint: string;
 }
 
 interface Chat {
@@ -146,14 +147,14 @@ export class ChatService {
     const { paths } = this.d;
     engine = engine || this.d.settings.get().alwaysEngine;
     const meta = this.d.projects.meta(slug);
-    this.d.checkpoints.create(slug, { prompt: display || prompt, engine });
+    const checkpoint = this.d.checkpoints.create(slug, { prompt: display || prompt, engine });
     this.push(slug, 'user', display || prompt, { engine });
     // Absolute paths ("//abs/**"): relative rules resolve against Claude's current directory,
     // so a `cd` in a shell command would otherwise make the game's own files unwritable.
     const allow = (dir: string) => [`Edit(/${dir}/**)`, `Write(/${dir}/**)`];
     const tools = [...BASE_TOOLS, ...allow(gameDir(paths, slug))];
     if (engine) tools.push(...allow(paths.engine));
-    const job: Job = { handle: { stop() {} }, startedAt: Date.now(), engine };
+    const job: Job = { handle: { stop() {} }, startedAt: Date.now(), engine, checkpoint };
     c.job = job;
     job.handle = this.d.runner.start(
       {
@@ -192,6 +193,11 @@ export class ChatService {
           c.job = null;
           if (stopped) this.push(slug, 'status', 'Stopped. Open Checkpoints to undo any partial edits.');
           else if (error) this.push(slug, 'error', error);
+          try {
+            this.d.checkpoints.settle?.(slug, checkpoint); // before touch(), so game.json's timestamp isn't part of the diff
+          } catch (err) {
+            this.push(slug, 'error', `Couldn't record this change in the checkpoint history: ${(err as Error).message}`);
+          }
           this.d.projects.touch(slug);
           this.save(c);
           this.broadcastState(c);

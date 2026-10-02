@@ -28,6 +28,10 @@ export class FsCheckpointStore implements CheckpointStore {
     return id;
   }
 
+  has(slug: string, id: string) {
+    return /^[a-z0-9]+$/.test(id) && fs.existsSync(path.join(this.dir(slug), id, 'meta.json'));
+  }
+
   list(slug: string): CheckpointMeta[] {
     let ids: string[] = [];
     try {
@@ -41,12 +45,13 @@ export class FsCheckpointStore implements CheckpointStore {
       .sort((a, b) => b.time - a.time);
   }
 
-  restore(slug: string, id: string) {
+  // saveFirst: false when the caller has already saved the current state its own way.
+  restore(slug: string, id: string, { saveFirst = true } = {}) {
     const dir = path.join(this.dir(slug), id);
     const meta = readJSON<CheckpointMeta | null>(path.join(dir, 'meta.json'), null);
     if (!meta) throw new Error('No such checkpoint');
     const engine = fs.existsSync(path.join(dir, 'engine'));
-    this.create(slug, { prompt: `Before restoring: ${meta.prompt}`, engine });
+    if (saveFirst) this.create(slug, { prompt: `Before restoring: ${meta.prompt}`, engine });
     const game = gameDir(this.p, slug);
     const thumb = path.join(game, 'thumb.jpg');
     const thumbData = fs.existsSync(thumb) ? fs.readFileSync(thumb) : null;

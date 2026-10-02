@@ -117,9 +117,8 @@ One Node process per checkout owns the harness: chats, agent jobs, checkpoints a
 
 The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Every phase keeps the three games and both surfaces working.
 
-- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`).
+- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`), P4 (git checkpoints with diffs).
 - Next:
-  - P4: shadow-git checkpoints with diffs.
   - P5: Agent SDK runner behind an `AgentRunner` interface, plus engine `.d.ts` types and a `check_game` tool.
   - P6: React studio shell (TanStack Router and Query, shadcn, Tailwind v4) with the game in an iframe and a typed postMessage bridge.
   - P7: build panels in React, live-game MCP tools and permission prompts.
@@ -191,7 +190,8 @@ Templates are copied, never linked. See Gotchas.
 
 - `settings.json` - studio-wide settings, currently only `alwaysEngine`. Both the browser dev server and the desktop app read it fresh on every prompt.
 - `projects/<slug>/chat.json` - chat log and Claude session id for each project. Meridian's chat history from before the restructure was migrated here.
-- `checkpoints/<slug>/<id>/` - one snapshot per prompt, with `meta.json`.
+- `git/<slug>.git`, `git/engine.git` - checkpoint history (see Checkpoints).
+- `checkpoints/<slug>/<id>/` - legacy folder checkpoints from before git history, still listed and restorable.
 - `shots/<slug>/` - screenshots attached to prompts.
 - `trash/` - deleted projects, as `<slug>-<timestamp>/game` plus `/chat` (delete also drops the in-memory chat, so a new project with the same name starts clean).
 - `backup-pre-harness.tar.gz` - the project as it was before the restructure.
@@ -216,7 +216,7 @@ The old single-file Vite plugin is gone, replaced by:
   - `projects.ts`: projects and templates.
   - `chat.ts`: `ChatService`, which owns logs, jobs and subscribers.
   - `chat-store.ts`: `ChatRepository`, JSON-backed.
-  - `checkpoints/`: `CheckpointStore`, folder copies for now.
+  - `checkpoints/`: `CheckpointStore`, implemented by `git.ts` (with `fs.ts` for legacy checkpoints and as the fallback).
   - `reloads.ts`: `ReloadCoordinator`.
   - `settings.ts`, `prompts.ts`, `events.ts` (the `StudioEvents` bus) and `paths.ts`.
   - `agent/`: the `AgentRunner` interface and `CliRunner`.
@@ -270,9 +270,18 @@ claude -p <prompt> --output-format stream-json --verbose --permission-mode defau
 
 ### Checkpoints
 
-- Before every prompt, `FsCheckpointStore.create()` copies `games/<slug>/` (minus `thumb.jpg`), plus `engine/` when engine edits are allowed, into `.harness/checkpoints/<slug>/<id>/` with a `meta.json` holding the prompt, the time and the engine flag.
-- It keeps the newest 30 per project (`MAX_CHECKPOINTS`).
-- `FsCheckpointStore.restore()` first saves a "Before restoring: ..." checkpoint, so a restore can be undone. It then replaces the game folder (and `engine/` if the checkpoint has it), keeps the current thumbnail and reloads the affected tabs.
+Git history, kept out of the user's own repository (`domain/checkpoints/git.ts`, `GitCheckpointStore`):
+
+- Each project has a private repository at `.harness/git/<slug>.git`, whose work tree is `games/<slug>/`. The engine has one at `.harness/git/engine.git` (work tree `engine/`). `thumb.jpg` and `.DS_Store` are excluded.
+- Before every prompt, `create()` commits the game, and the engine too when engine edits are allowed. That "before" commit is the checkpoint, and its 12-character sha is the id.
+  - Trailers carry `Ws-Kind: checkpoint`, `Ws-Time`, `Ws-Prompt` (JSON) and `Ws-Engine` (the engine commit).
+- When the run ends, `ChatService` calls `settle()`, which commits the run's edits as an "after" commit (`Ws-Run: <id>`). This happens before `game.json`'s `updated` stamp is written, so the stamp stays out of the diff.
+- `list()` adds `files`, `additions` and `deletions` from the before-to-after diff. The Checkpoints tab shows them ("1 file, +1 −0").
+- `GET /chat/<slug>/checkpoints/<id>/diff` returns `{ id, files, patch }`. Engine files get an `engine/` prefix. A run that hasn't settled diffs against the work tree.
+- `restore()` first saves a "Before restoring: ..." checkpoint, so the restore can be undone. It then runs `git read-tree -u --reset <id>`, so the game matches the checkpoint exactly (files added since are removed, `thumb.jpg` stays), and commits. History only moves forward. The engine is restored too if the checkpoint has one.
+- Folder checkpoints from before the switch (`.harness/checkpoints/<slug>/<id>/`) still show in the list with `legacy: true`, and they still restore through `FsCheckpointStore`. No migration step; nothing was converted.
+- Deleting a project moves its history into the trash entry as `history.git`. A duplicate starts with no history.
+- Without git on PATH the studio falls back to `FsCheckpointStore`, the old folder copies (newest 30 kept).
 - Restore refuses while a job is running.
 
 ### Reloads

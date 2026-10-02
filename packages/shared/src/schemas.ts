@@ -70,7 +70,20 @@ export const CheckpointMeta = z.object({
   prompt: z.string(),
   time: z.number(),
   engine: z.boolean(),
+  // What the prompt changed, when known (git checkpoints, once the run has finished).
+  files: z.number().optional(),
+  additions: z.number().optional(),
+  deletions: z.number().optional(),
+  // Folder-copy checkpoint from before git checkpoints.
+  legacy: z.boolean().optional(),
 });
+
+export const CheckpointDiff = z.object({
+  id: z.string(),
+  files: z.array(z.object({ path: z.string(), additions: z.number(), deletions: z.number() })),
+  patch: z.string(),
+});
+export type CheckpointDiff = z.infer<typeof CheckpointDiff>;
 export type CheckpointMeta = z.infer<typeof CheckpointMeta>;
 
 export const Settings = z.object({ alwaysEngine: z.boolean().default(false) });

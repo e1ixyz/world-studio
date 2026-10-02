@@ -56,6 +56,10 @@ export function createApi(studio: Studio) {
       });
     })
     .get('/checkpoints', (c) => c.json(checkpoints.list(c.req.param('slug') as string)))
+    .get('/checkpoints/:id/diff', (c) => {
+      const d = checkpoints.diff?.(c.req.param('slug') as string, c.req.param('id'));
+      return d ? c.json(d) : c.json({ error: 'No diff for this checkpoint' }, 404);
+    })
     .post('/prompt', body(PromptBody), (c) => {
       const text = c.var.body.text.trim();
       if (!text) return c.json({ error: 'empty prompt' }, 400);
