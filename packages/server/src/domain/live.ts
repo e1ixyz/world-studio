@@ -21,7 +21,11 @@ export class LiveGames {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new NoGameWindow('No game window answered. The user may not have this project open; ask them to open it in World Studio.'));
+        reject(
+          new NoGameWindow(
+            "No game window answered: the user doesn't have this project open, so you can't see the game run. check_game only checks types, not that the game starts, so don't say it works; tell the user to open the project and check, or ask them to open it so you can look.",
+          ),
+        );
       }, timeoutMs);
       this.pending.set(id, { slug, resolve, reject, timer });
       this.events.emit('probe', { slug, id, what });

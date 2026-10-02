@@ -77,9 +77,17 @@ async function main() {
   const tweaks = new Tweaks(saved);
   const select = new Selection(scene);
   const textures = makeBaseTextures(renderer.capabilities.getMaxAnisotropy());
+  // Physics loads on demand: one Rapier world per game, created the first time setup asks.
+  let physics = null;
+  let physicsReady = null;
   const ctx = {
     THREE, scene, camera, renderer, app, env, audio, hud, tweaks, select, textures, input,
     rng: createRng(slug), slug, meta, player: null, mode: 'menu', started: false,
+    physics: (opts = {}) =>
+      (physicsReady ??= import('./physics/physics.js').then(async (m) => {
+        physics = await m.createPhysics({ ...opts, scene, select, tweaks });
+        return physics;
+      })),
   };
 
   let game;
@@ -313,6 +321,11 @@ async function main() {
     }
     ctx.mode = mode;
     ctx.started = started;
+    if (physics) {
+      // the player (or the car) shoves bodies; the world only advances while the game does
+      if (started && mode === 'play') physics.movePlayer(player.pos, player.car);
+      if (simulate) physics.step(dt);
+    }
     if (simulate) {
       t += dt;
       try {
@@ -403,7 +416,7 @@ async function main() {
     import.meta.hot.on('vite:beforeFullReload', () => started && saveSnapshot(slug, snapshot()));
   }
 
-  window.__game = { app, ctx, game, player, env, camera, select, tweaks, build, input, start, setMode, get state() { return mode; } };
+  window.__game = { app, ctx, game, player, env, camera, select, tweaks, build, input, start, setMode, get state() { return mode; }, get physics() { return physics; } };
   window.__harness = { slug, meta, getSelection: () => select.describe(), mode: () => mode, screenshot: () => screenshot() };
 
   showMenu('Play');

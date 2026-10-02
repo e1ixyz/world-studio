@@ -11,6 +11,7 @@ export function systemPrompt(slug: string, meta: GameMeta, engine: boolean, { ch
   }
 - Read engine/API.md before your first change in a conversation (engine/types.d.ts has the exact types). It documents the game contract (defineGame, setup(ctx), the returned world/update/snapshot/restore), the build-mode hooks and the engine helpers.
 - Expose tunable numbers and colors with ctx.tweaks.add so the user can adjust them live in build mode.
+- For anything that falls, stacks, rolls, bounces or gets knocked over, use the engine's physics (await ctx.physics(), see "Physics" in engine/API.md) instead of hand-written motion. engine/API.md also lists the libraries already installed (three's addons, text(), enableBVH()); you can't install others.
 - Register new clickable objects with ctx.select.add (or addProvider for moving things) so point-and-prompt works on them.
 - Keep snapshot()/restore() in sync with any new game state, so reloads don't lose progress.
 - Prompts may start with [Game context: ...], [Selected object: ...] or [Screenshot: <path>] blocks. Read a screenshot path with the Read tool to see what the user sees.

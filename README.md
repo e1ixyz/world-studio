@@ -2,7 +2,7 @@
 
 A local studio for building 3D browser games with Claude while they run. Each project is its own game on a shared Three.js engine. Open one, walk around in it, press Tab to switch to build mode, click anything and tell Claude what to change. The game reloads where you stand, with your position and progress kept.
 
-It runs in a browser or as a macOS desktop app, and both talk to the same local studio server. Games and the engine are plain JavaScript on Three.js 0.186 with no asset files: every texture is drawn on a canvas and every sound is synthesized with Web Audio. The studio around them is TypeScript: a Hono server, a React app, a Postgres database (PGlite) and the Claude Agent SDK.
+It runs in a browser or as a macOS desktop app, and both talk to the same local studio server. Games and the engine are plain JavaScript on Three.js 0.186, with Rapier physics on demand and no asset files: every texture is drawn on a canvas and every sound is synthesized with Web Audio. The studio around them is TypeScript: a Hono server, a React app, a Postgres database (PGlite) and the Claude Agent SDK.
 
 ## Run it
 
@@ -83,7 +83,7 @@ When you send a prompt, the server:
 
 | Path | What it is |
 | --- | --- |
-| `engine/` | The shared game runtime: renderer, sky, player, HUD, audio, build mode's in-world half. Its contract for games is [engine/API.md](engine/API.md), typed in `engine/types.d.ts`. |
+| `engine/` | The shared game runtime: renderer, sky, player, HUD, audio, physics (Rapier, loaded on demand), build mode's in-world half. Its contract for games is [engine/API.md](engine/API.md), typed in `engine/types.d.ts`. |
 | `games/<slug>/` | One folder per project: `game.js`, `game.json`, `tweaks.json`, `thumb.jpg` and any other game code. |
 | `templates/` | Starting points copied into `games/` when you create a project. |
 | `packages/server/` | The studio server: the daemon, the Hono API, projects, chats, agent runners, checkpoints, reloads, and the Vite plugin. |
@@ -100,7 +100,9 @@ When you send a prompt, the server:
 
 - Meridian City (`games/meridian-city/`): a procedurally generated island city about 1.5 km across, with stepped skyscrapers, parks, a 360 m landmark tower, about 420 AI cars and 900 pedestrians. Find all 40 data cores; their light beams show from a distance, and a timer runs until you collect the last one. A full day passes in 12 real minutes.
 - Medieval Village (`games/medieval-village/`) and Cyberpunk City (`games/cyberpunk-city/`): built in the studio from the Blank template.
-- Templates for new projects: Blank world (an empty flat plane) and Meridian City.
+- Templates for new projects: Blank world (an empty flat plane), Meridian City, and Physics Playground (ramps, a seesaw and crate towers to knock over with thrown balls).
+
+Games can use rigid-body physics (Rapier) through `ctx.physics()`: things that fall, stack, roll, bounce and get shoved when you walk into them. Claude is told to use it, along with the other libraries the engine provides (Three.js's add-ons, crisp world-space text, fast raycasting); [engine/API.md](engine/API.md) lists them.
 
 ## Controls
 

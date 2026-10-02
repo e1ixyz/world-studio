@@ -23,9 +23,11 @@ export class Selection {
     scene.add(this.helper);
   }
 
-  // entry: { kind, id?, box: [x0, y0, z0, x1, y1, z1] | Box3, props?, source? }
+  // entry: { kind, id?, box: [x0, y0, z0, x1, y1, z1] | Box3, props?, source? }, or getBox() in
+  // place of box for something that moves
   add(entry) {
-    const e = { ...entry, box: toBox(entry.box) };
+    const box = entry.box ?? entry.getBox?.();
+    const e = { ...entry, box: box ? toBox(box) : new THREE.Box3() };
     this.items.push(e);
     return e;
   }

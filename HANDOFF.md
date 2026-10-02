@@ -204,6 +204,7 @@ CLAUDE.md    project instructions for Claude: run the parity skill before finish
 
 - `blank/` - an empty 2 km flat plane: one ground mesh, a selectable ground entry and a ground-tint tweak. No scenery or example objects; games add mountains themselves with `buildMountains(scene)` if they want them.
 - `meridian-city/` - a copy of Meridian City. It matches `games/meridian-city/` except for `game.json` and the missing `thumb.jpg`.
+- `physics-playground/` - ramps, a seesaw, crate towers and thrown balls on the engine's physics; the pattern for physics games.
 
 Templates are copied, never linked. See Gotchas.
 
@@ -406,6 +407,37 @@ React 19 with TanStack Router (file-based routes in `src/routes/`; `routeTree.ge
 - In production there's no New project button and no card actions. The list comes from `src/lib/registry.prod.js`, the glob of every `game.json`. A card opens `play.html?game=<slug>`.
 - The React and Tailwind plugins live in `vite.config.js` and are scoped to `apps/studio/src`. Games and the engine stay plain JS, with the harness's own reload handling.
 - `bun run typecheck` checks the studio too (`apps/studio/tsconfig.json`).
+
+## Physics and the game kit: `engine/physics/`, `engine/kit/`
+
+Games get rigid-body physics and a few plain Three.js helpers. All of it is installed at the root and documented for the agent in `engine/API.md` ("Physics", "Libraries you can use"), which can't install packages. React Three Fiber and Drei were considered and left out (2026-10-02): they would mean rewriting the engine and every game around React's render loop, and Drei's useful parts exist as plain libraries.
+
+- **Physics** (`engine/physics/physics.js`, `@dimforge/rapier3d-compat` 0.21):
+  - `await ctx.physics({ gravity })` dynamically imports Rapier and creates one world per game. Games that never call it don't load it (the build splits it into its own chunk; e2e checks the other games never fetch it).
+  - The helper:
+    - `addStatic(meshOrBox)`, `addHeightfield(...)`,
+    - `addBody(mesh, { shape, mass, restitution, velocity, kinematic, index, ccd, ... })` (the mesh, or an `InstancedMesh` instance, follows the body after every step),
+    - `onContact`, `raycast`, `groundY(x, z)` (for `world.groundY`, so the player walks on colliders), `remove`,
+    - `showColliders`, plus the raw `RAPIER` and `world` for joints and controllers.
+  - The runtime (`engine/runtime.js`, the loop) steps it on a fixed 1/60 s clock (at most 4 steps a frame) whenever `game.update` runs. It pauses with the game, and the step is deterministic across frame rates (unit tested).
+  - In play mode the runtime moves a kinematic capsule (or a box for the car) to the player every frame, so walking or driving into bodies shoves them. The player itself still collides through `world.grid`.
+  - Bodies with meshes register a `ctx.select` provider, so they're clickable in build mode. "Physics / Show colliders" is an engine tweak that draws Rapier's debug render.
+  - `window.__game.physics` exposes the helper for tests.
+- **Kit helpers** (`engine/kit/`, exported from `engine/index.js`):
+  - `text()` wraps troika-three-text for SDF text. It needs network the first time, for the font.
+  - `enableBVH()` installs three-mesh-bvh, so `geometry.computeBoundsTree()` speeds up raycasts. Its type augmentation is pulled in by `engine/index.d.ts`.
+- **Types:** `engine/types.d.ts` types `ctx.physics()` and the helper, so `check_game` catches a wrong shape or a misspelled field.
+- **Agent prompt:** the system prompt (`prompts.ts`) tells the agent to use physics for anything that falls, stacks, rolls or gets knocked over, and points at the libraries list.
+- **Template:** `templates/physics-playground/` has ramps, a seesaw on a revolute joint, crate towers, thrown balls (R), a "Crates down" objective and a troika sign, all in one file the agent can copy.
+- **Verified 2026-10-02:**
+  - unit tests (falling and resting, determinism, a ramp, contacts, player shove, picking, instances),
+  - e2e on web and Electron (the playground runs, throws, pauses frozen, shoves, picks; other games don't load Rapier),
+  - an export from a static server.
+  - A real Haiku prompt ("a pile of barrels I can knock over") read `API.md`, used `ctx.physics()` and `check_game`, and works; walking into a barrel pushed it 3.5 m.
+- **Fixed along the way:**
+  - `ctx.select.add` crashed on an entry with `getBox()` and no `box`. It now accepts that, and the crash took the agent's whole game down.
+  - With no window open, the live tools' error now tells the agent `check_game` doesn't prove the game starts, so it shouldn't say it works.
+- **Not done yet:** pmndrs `postprocessing` in place of the EffectComposer bloom, Rapier's vehicle controller for cars, a character-controller player mode, ZzFX sound effects.
 
 ## Themes: `packages/theme/`
 

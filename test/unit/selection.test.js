@@ -19,6 +19,16 @@ describe('Selection', () => {
     expect(s.pick(ray([0, 1, 0], [0, 1, 0]))).toBeNull();
   });
 
+  it('accepts getBox() in place of box, and follows it', () => {
+    const s = new Selection(new THREE.Scene());
+    let x = 0;
+    s.add({ kind: 'barrel', getBox: () => [x, 0, -1, x + 1, 1, 1] });
+    expect(s.pick(ray([0.5, 0.5, 5], [0, 0, -1]))?.kind).toBe('barrel');
+    x = 10;
+    expect(s.pick(ray([0.5, 0.5, 5], [0, 0, -1]))).toBeNull();
+    expect(s.pick(ray([10.5, 0.5, 5], [0, 0, -1]))?.kind).toBe('barrel');
+  });
+
   // This string goes into prompts verbatim; the agent's system prompt documents its shape.
   it('describe() keeps its exact format', () => {
     const s = new Selection(new THREE.Scene());

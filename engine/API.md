@@ -45,6 +45,7 @@ export default defineGame({
 | `player` | Set **after** `setup` returns. Read it inside `update` via `ctx.player`. |
 | `slug`, `meta` | The project folder name and its `game.json`. |
 | `mode`, `started` | `'menu' | 'play' | 'build' | 'paused' | 'map'`, updated every frame. |
+| `physics(opts)` | `await ctx.physics({ gravity })` gives the game a Rapier physics world (see Physics). Loaded on the first call; one world per game. |
 
 ### What `setup` returns
 
@@ -103,6 +104,46 @@ ctx.select.addProvider(() => enemies.map((e) => ({ kind: 'enemy', id: e.id, prop
 - `textures.*`: the canvas texture helpers.
 
 For performance, prefer `InstancedMesh` for many copies of the same thing, merged geometry for static structures, and canvas textures over image files (games ship no asset files).
+
+## Physics
+
+For anything that falls, stacks, rolls, bounces, swings or gets knocked over, use the engine's physics instead of moving things by hand. It is Rapier (`@dimforge/rapier3d-compat`), loaded only when a game calls it:
+
+```js
+const physics = await ctx.physics({ gravity: -9.81 });
+
+physics.addStatic([-200, -1, -200, 200, 0, 200]);           // the floor: a box [x0, y0, z0, x1, y1, z1]
+physics.addStatic(rampMesh, { shape: 'box' });              // a placed mesh ('trimesh' by default, or 'box' | 'hull')
+
+const crate = new THREE.Mesh(boxGeo, mat);
+crate.position.set(0, 5, 0);
+scene.add(crate);                                           // body meshes are direct children of the scene
+const body = physics.addBody(crate, { mass: 2, kind: 'crate', source: `games/${ctx.slug}/game.js → crates` });
+
+physics.addBody(ball, { shape: 'ball', restitution: 0.6, ccd: true, velocity: dir.multiplyScalar(25) });
+physics.onContact(body, (other, started) => started && ctx.audio.door());
+const hit = physics.raycast(from, dir, 100);                // { point, distance, body, mesh } or null
+physics.remove(body);
+```
+
+- Shapes for `addBody`: `'box'` (default), `'ball'`, `'capsule'`, `'hull'`, all sized from the mesh's geometry and scale. Options: `mass`, `density`, `friction`, `restitution`, `velocity`, `angularVelocity`, `ccd` (fast small things), `linearDamping`, `angularDamping`, `kinematic: true` (you move it with `body.setNextKinematicTranslation`), `sensor: true` (contacts without pushing).
+- An `InstancedMesh` works too: `addBody(instanced, { index: i })` per instance (keep that InstancedMesh at the origin).
+- The engine steps the world on a fixed 1/60 s clock whenever the game updates, so it pauses with the game (menu pause, map, build mode with Freeze world on) and runs the same on every machine.
+- The mesh follows its body after every step. Don't also move it yourself; move the body (`body.setTranslation`, `setLinvel`, `applyImpulse`).
+- The player shoves bodies: walking or driving into a crate pushes it. The player itself still collides through `world.grid`; to let the player walk on physics surfaces (ramps, platforms, crates), return `groundY: (x, z) => physics.groundY(x, z)` in `world`.
+- Bodies show in build mode's picking automatically (`kind`, `id` and `source` from the options, with mass and speed as properties), so don't also `ctx.select.add` them. "Physics / Show colliders" under Engine settings draws every collider.
+- `physics.RAPIER` and `physics.world` are the real Rapier module and world: joints (`world.createImpulseJoint(RAPIER.JointData.revolute(...), a, b, true)`), the character controller (`world.createCharacterController`), the raycast vehicle controller and everything else in Rapier's docs.
+- A reload runs `setup` again and rebuilds the world from scratch. Keep score and progress in `snapshot()`/`restore()` as usual; the bodies come back from your setup code.
+- `templates/physics-playground/game.js` uses all of this in one file: ramps, a seesaw on a joint, crate towers, thrown balls.
+
+## Libraries you can use
+
+Installed for every game; import them directly, no install needed (and you can't install packages):
+
+- `three` and its addons, `three/examples/jsm/...`: everything that needs no asset files, for example `math/ImprovedNoise.js` and `math/SimplexNoise.js` (terrain, clouds), `objects/Water.js`, `objects/Sky.js`, `objects/Lensflare.js`, `utils/BufferGeometryUtils.js` (merging), `geometries/RoundedBoxGeometry.js`, `misc/GPUComputationRenderer.js`, `modifiers/SimplifyModifier.js`, `curves/*`. Games ship no asset files, so no model or texture loaders.
+- `text(string, opts)` from `engine/index.js`: crisp world-space text (troika-three-text) for signs and labels. `opts`: `size`, `color`, `anchorX`, `anchorY`, `maxWidth`, `align`, `outlineWidth`, `outlineColor`, `depthTest`. It returns a mesh; set `.text` and call `.sync()` to change it. Fonts load from a CDN the first time.
+- `enableBVH()` from `engine/index.js`: call once, then `mesh.geometry.computeBoundsTree()` on big meshes you raycast against (picking, line of sight, placing things on terrain) for much faster raycasts.
+- Physics, through `ctx.physics()` above.
 
 ## Types
 
