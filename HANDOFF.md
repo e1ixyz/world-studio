@@ -84,7 +84,7 @@ One Node process per checkout owns the harness: chats, agent jobs, checkpoints a
 
 ## Desktop app: `apps/desktop/`
 
-`bun run app:install` (`apps/desktop/package.mjs`) packages `World Studio.app` with `@electron/packager`, signs it ad hoc, copies it to `~/Applications` and symlinks it onto the Desktop. `bun run app` runs the shell from source. `bun run app:icon` redraws `icon.icns` and `icon.png` from `icon.svg`.
+`bun run app:install` (`apps/desktop/package.mjs`) packages `World Studio.app` with `@electron/packager` in a temp folder (deleted afterwards, so there is only one copy on disk), signs it ad hoc, copies it to `~/Applications` and symlinks it onto the Desktop. `bun run app` runs the shell from source. `bun run app:icon` redraws `icon.icns` and `icon.png` from `icon.svg`.
 
 - The app is a thin shell. The bundle holds only `package.json` and `apps/desktop/main.js`.
   - At launch `attachOrSpawn()` reads `.harness/daemon.json` through the checkout's `packages/server/src/lock.ts`.

@@ -6,6 +6,8 @@ import { BLOCKS, BLOCK, ROAD, LANE, roadC } from './config.js';
 const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 const R = ROAD / 2;
 const COLORS = ['#b8241c', '#1f2f45', '#e8eaec', '#f2c21b', '#f2c21b', '#237a45', '#2766a8', '#7c8388', '#141414', '#d0561b', '#6b3a8c', '#b9bec3', '#15877a', '#8a1c2c'];
+// paint for specific cars, keyed by the build-mode "car n" id
+const PAINTED = { 484: '#c8221a' };
 const SHAPES = [[1, 1, 1], [1, 1, 1], [1.06, 1.22, 1.04], [1.18, 1.48, 1.08], [0.86, 0.98, 0.95]];
 const inb = (i, j) => i >= 0 && i <= BLOCKS && j >= 0 && j <= BLOCKS;
 
@@ -78,6 +80,7 @@ export class Vehicles {
     const c = new THREE.Color();
     this.list.forEach((v, k) => {
       v.k = k;
+      if (PAINTED[k]) v.color = PAINTED[k];
       this.body.setColorAt(k, c.set(v.color));
     });
     // rainbow paint: these cars cycle through the hue wheel
