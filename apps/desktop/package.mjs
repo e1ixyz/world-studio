@@ -16,6 +16,8 @@ const KEEP = new Set(['/package.json', '/apps', '/apps/desktop', '/apps/desktop/
 
 fs.writeFileSync(path.join(here, 'root.json'), JSON.stringify({ root }, null, 2));
 
+// build in a temp folder and delete it afterwards, so ~/Applications holds the only copy of the app
+const outRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'world-studio-'));
 const [outDir] = await packager({
   dir: root,
   name: NAME,
@@ -23,7 +25,7 @@ const [outDir] = await packager({
   appBundleId: 'com.e1ixyz.worldstudio',
   appCategoryType: 'public.app-category.developer-tools',
   icon: path.join(here, 'icon.icns'),
-  out: path.join(here, 'out'),
+  out: outRoot,
   overwrite: true,
   prune: false,
   asar: false,
@@ -39,6 +41,7 @@ const installed = path.join(appsDir, `${NAME}.app`);
 fs.mkdirSync(appsDir, { recursive: true });
 fs.rmSync(installed, { recursive: true, force: true });
 execFileSync('ditto', [built, installed]);
+fs.rmSync(outRoot, { recursive: true, force: true });
 
 const link = path.join(os.homedir(), 'Desktop', `${NAME}.app`);
 const existing = fs.lstatSync(link, { throwIfNoEntry: false });
