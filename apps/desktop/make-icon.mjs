@@ -1,4 +1,4 @@
-// Renders desktop/icon.svg to desktop/icon.icns. Run with: npx electron desktop/make-icon.mjs
+// Renders apps/desktop/icon.svg to icon.icns. Run with: bun run app:icon
 // Electron draws the SVG offscreen (keeping transparency); sips + iconutil make the .icns.
 import { app, BrowserWindow } from 'electron';
 import { execFileSync } from 'node:child_process';
@@ -31,6 +31,6 @@ app.whenReady().then(async () => {
     execFileSync('sips', ['-z', String(s * 2), String(s * 2), base, '--out', path.join(set, `icon_${s}x${s}@2x.png`)], { stdio: 'ignore' });
   }
   execFileSync('iconutil', ['-c', 'icns', set, '-o', path.join(here, 'icon.icns')]);
-  console.log('Wrote desktop/icon.icns and desktop/icon.png');
+  console.log('Wrote apps/desktop/icon.icns and apps/desktop/icon.png');
   app.quit();
 });

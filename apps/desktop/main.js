@@ -1,15 +1,15 @@
-// World Studio desktop shell: runs the Vite dev server (with the harness plugin) inside the
-// Electron main process and shows it in a window. No browser, no terminal, no visible localhost.
-import { app, BrowserWindow, dialog, shell } from 'electron';
+// World Studio desktop shell: a window onto the checkout's studio daemon. If a daemon is already
+// running for the checkout (say, from `bun run dev` in a terminal) the app attaches to it, so the
+// browser and the app share one harness. Otherwise it starts one in a utilityProcess and stops it
+// again on quit. No browser, no terminal, no visible localhost.
+import { app, BrowserWindow, dialog, shell, utilityProcess } from 'electron';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const PORT = 5199; // own port so a terminal `npm run dev` on 5173 doesn't collide, and localStorage stays put
-
-let server = null;
+let daemon = null; // the utilityProcess, only when this app started the daemon
 let win = null;
 let origin = '';
 
@@ -53,8 +53,10 @@ function fixPath() {
   }
 }
 
-// The workspace is a World Studio checkout (vite.config.js, games/, engine/, node_modules/).
-const isWorkspace = (dir) => !!dir && fs.existsSync(path.join(dir, 'vite.config.js')) && fs.existsSync(path.join(dir, 'node_modules/vite/package.json'));
+// The workspace is a World Studio checkout (vite.config.js, the daemon, node_modules/).
+const DAEMON = 'packages/server/src/cli.ts';
+const isWorkspace = (dir) =>
+  !!dir && fs.existsSync(path.join(dir, 'vite.config.js')) && fs.existsSync(path.join(dir, DAEMON)) && fs.existsSync(path.join(dir, 'node_modules/vite/package.json'));
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
 
 function readJSON(file) {
@@ -70,7 +72,7 @@ async function resolveRoot() {
     process.env.WORLD_STUDIO_ROOT,
     readJSON(configFile())?.root,
     readJSON(path.join(here, 'root.json'))?.root, // written by desktop/package.mjs
-    app.isPackaged ? null : path.resolve(here, '..'),
+    app.isPackaged ? null : path.resolve(here, '../..'),
   ];
   const found = candidates.find(isWorkspace);
   if (found) return found;
@@ -84,19 +86,46 @@ async function resolveRoot() {
   return filePaths[0];
 }
 
-async function startServer(root) {
-  process.chdir(root);
-  const vite = await import(pathToFileURL(path.join(root, 'node_modules/vite/dist/node/index.js')).href);
-  server = await vite.createServer({
-    root,
-    configFile: path.join(root, 'vite.config.js'),
-    server: { port: PORT, strictPort: false, open: false },
-    clearScreen: false,
+// Attach to the checkout's running daemon, or start one. WORLD_STUDIO_ISOLATED=1 (tests) always
+// starts a private daemon on a free port without touching the lock.
+async function attachOrSpawn(root) {
+  const isolated = process.env.WORLD_STUDIO_ISOLATED === '1';
+  if (!isolated) {
+    const { findDaemon } = await import(pathToFileURL(path.join(root, 'packages/server/src/lock.ts')).href);
+    const running = await findDaemon(root);
+    if (running) {
+      console.log(`Attached to the running daemon at ${running.url} (pid ${running.pid})`);
+      return running.url;
+    }
+  }
+  const args = ['--root', root, ...(isolated ? ['--no-lock', '--port', '0'] : [])];
+  const child = utilityProcess.fork(path.join(root, DAEMON), args, { cwd: root, env: process.env, stdio: 'pipe', serviceName: 'World Studio daemon' });
+  child.stdout.on('data', (d) => console.log(String(d).trimEnd()));
+  child.stderr.on('data', (d) => console.error(String(d).trimEnd()));
+  const msg = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('The studio daemon did not start within 60 s')), 60_000);
+    child.on('message', (m) => {
+      if (!['ready', 'attached', 'error'].includes(m?.type)) return;
+      clearTimeout(timer);
+      resolve(m);
+    });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      reject(new Error(`The studio daemon exited (code ${code})`));
+    });
   });
-  await server.listen();
-  const url = server.resolvedUrls?.local?.[0] || `http://localhost:${server.config.server.port}/`;
-  console.log(`Vite ready at ${url} (root ${root})`);
-  return url;
+  if (msg.type === 'error') throw new Error(msg.message);
+  if (msg.type === 'attached') {
+    console.log(`Another daemon won the start race; attached to ${msg.url}`);
+    return msg.url;
+  }
+  daemon = child;
+  child.once('exit', (code) => {
+    daemon = null;
+    console.warn(`Studio daemon exited (code ${code})`);
+  });
+  console.log(`Started the studio daemon at ${msg.url} (root ${root})`);
+  return msg.url;
 }
 
 function createWindow(url) {
@@ -145,7 +174,7 @@ if (!app.requestSingleInstanceLock()) {
     try {
       const root = await resolveRoot();
       if (!root) return app.quit();
-      const url = await startServer(root);
+      const url = await attachOrSpawn(root);
       createWindow(url);
       app.on('activate', () => {
         if (!win) createWindow(url);
@@ -159,16 +188,26 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('window-all-closed', () => app.quit());
 
-  // Close Vite (and with it any running agent jobs) before exiting.
+  // Stop the daemon (and with it any running agent jobs) before exiting, but only if this app
+  // started it. A daemon from a terminal keeps serving the browser.
   let closing = false;
   app.on('before-quit', (e) => {
-    if (!server || closing) return;
+    if (!daemon || closing) return;
     closing = true;
     e.preventDefault();
+    const child = daemon;
     const done = () => {
-      server = null;
+      daemon = null;
       app.quit();
     };
-    Promise.race([server.close(), new Promise((r) => setTimeout(r, 3000))]).then(done, done);
+    const timer = setTimeout(() => {
+      child.kill();
+      done();
+    }, 5000);
+    child.once('exit', () => {
+      clearTimeout(timer);
+      done();
+    });
+    child.postMessage({ type: 'shutdown' });
   });
 }

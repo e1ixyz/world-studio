@@ -1,0 +1,13 @@
+{
+  "name": "@ws/server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./daemon": "./src/daemon.ts",
+    "./lock": "./src/lock.ts"
+  },
+  "dependencies": {
+    "@ws/shared": "workspace:*"
+  }
+}

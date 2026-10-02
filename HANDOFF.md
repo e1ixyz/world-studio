@@ -1,12 +1,12 @@
 # World Studio - Handoff
 
-Last updated 2026-10-01.
+Last updated 2026-10-02.
 
 World Studio is a harness for building browser 3D games with Claude while they run. Every game lives in its own folder under `games/` and runs on one shared Three.js engine in `engine/`. A landing page lists the projects. Inside a game you can play it, or press Tab for build mode, click an object and tell Claude what to change. Claude edits only that game's folder, and the tab reloads in place with your position and progress kept.
 
-Until today (2026-09-30) this repo was a single game, Meridian City. It was restructured into World Studio the same day, and Meridian now lives in `games/meridian-city/` as the first game on the engine contract. Three.js 0.186 and Vite 8, plain JS ES modules, no framework, no asset files. User-facing overview and controls are in [README.md](README.md). The engine contract for games is [engine/API.md](engine/API.md); this file links to it rather than repeating it.
+Until today (2026-09-30) this repo was a single game, Meridian City. It was restructured into World Studio the same day, and Meridian now lives in `games/meridian-city/` as the first game on the engine contract. Three.js 0.186 and Vite 8, plain JS ES modules for the engine, games and harness, no asset files. It is mid-way through a phased re-architecture (see Re-architecture below): a bun workspace, one studio daemon shared by the browser and the app, and tests on both. User-facing overview and controls are in [README.md](README.md). The engine contract for games is [engine/API.md](engine/API.md); this file links to it rather than repeating it.
 
-The repo is private on GitHub at `e1ixyz/world-studio`. The macOS desktop app lives on the `electron-app` branch (see Desktop app below). A backup of the pre-restructure project is at `.harness/backup-pre-harness.tar.gz`.
+The repo is private on GitHub at `e1ixyz/world-studio`. Work happens on the `architecture` branch, which branches off `electron-app` (which has the macOS desktop app); `main` was fast-forwarded to `electron-app` on 2026-10-02. A backup of the pre-restructure project is at `.harness/backup-pre-harness.tar.gz`.
 
 ## Current state
 
@@ -30,9 +30,11 @@ Not verified yet:
 - The production build running end to end in a browser.
 - Mobile.
 
+Verified on 2026-10-02 after P0-P2 of the re-architecture: `bun run test` (22 unit tests), `bun run typecheck`, `bun run lint` and `npx vite build` pass. `bun run test:e2e` passes on both targets (web 11, app 9 + 2 web-only skips). By hand: a terminal daemon plus the app from source share one harness (a browser prompt streams into the app's chat, a settings change in the app updates the browser's menu live), quitting the app leaves the terminal daemon up, and an app-started daemon stops on quit and removes its lock. The installed app was rebuilt, found `claude`, started its daemon and served Meridian.
+
 Known gaps:
 
-- No automated tests and no lint.
+- Tests cover the harness with the fake agent; nothing exercises a real `claude` run automatically.
 - No mobile or touch controls.
 - Meridian: pedestrians don't collide with anything, and cars drive through them.
 - Meridian: AI cars can overlap at intersections, and driving has no damage.
@@ -41,35 +43,89 @@ Known gaps:
 ## Run and verify
 
 ```sh
-npm install
-npm run dev       # vite dev server: landing page, games, harness chat
-npm run build     # production build to dist/ (no harness)
-npm run preview   # serve dist/
-npm run app:install  # macOS app: build, install to ~/Applications, link on Desktop
-npm run app          # run the desktop shell from source
+bun install
+bun run dev          # the studio daemon: landing page, games, harness chat (or prints the running one's URL)
+bun run build        # production build to dist/ (no harness)
+bun run preview      # serve dist/
+bun run app:install  # macOS app: build, install to ~/Applications, link on Desktop
+bun run app          # run the desktop shell from source
+bun run test         # Vitest unit tests (test/unit/)
+bun run test:e2e     # vite build, then Playwright on web and Electron (e2e/)
+bun run typecheck    # TypeScript 7 over packages/*/src
+bun run lint         # Biome (games/ and templates/ are excluded)
 ```
 
-- `vite.config.js:8` sets port 5173. If it's taken, Vite picks the next free port, so use the URL the terminal prints.
-- `vite.config.js` also sets `appType: 'mpa'` with two inputs, `index.html` (landing) and `play.html` (game runtime), turns the HMR error overlay off so it doesn't cover the chat panel, and keeps `.harness/` out of the file watcher.
-- In dev, games open at `/play/<slug>`. The plugin rewrites that URL to `play.html` (`harness/server/plugin.js:499`). In production the landing page links to `play.html?game=<slug>` instead.
+- bun is only the package manager (`bunfig.toml` sets the hoisted linker). Everything runs on Node 24, which strips TypeScript types itself, so `packages/` runs from source with no build step. Electron 44's Node (24.21) does the same in a utilityProcess.
+- The daemon listens on 5173 or the next free port and writes the real URL to `.harness/daemon.json`. Use that URL, or the one the terminal prints.
+- `bun run dev:vite` still starts plain Vite with the harness plugin, without the daemon or its lock. Use it only for debugging.
+- `vite.config.js` sets `appType: 'mpa'` with two inputs, `index.html` (landing) and `play.html` (game runtime), turns the HMR error overlay off so it doesn't cover the chat panel, and keeps `.harness/` out of the file watcher.
+- In dev, games open at `/play/<slug>`. The plugin rewrites that URL to `play.html` (the `configureServer` middleware in `harness/server/plugin.js`). In production the landing page links to `play.html?game=<slug>` instead.
 - Before calling a change done: `npx vite build` must compile, and the game must load and play in a browser.
 - `window.__game` (`engine/runtime.js:398`) exposes `app`, `ctx`, `game`, `player`, `env`, `camera`, `select`, `tweaks`, `build`, `input`, `start(mode)`, `setMode(mode)` and a `state` getter. Playwright uses it to drive and inspect games. `window.__harness` (`engine/runtime.js:399`) carries the slug, the game's metadata and the current selection text for the chat client.
 
-## Desktop app: `desktop/`
+## Studio daemon: `packages/server/`
 
-`npm run app:install` (`desktop/package.mjs`) packages `World Studio.app` with `@electron/packager`, signs it ad hoc, copies it to `~/Applications` and symlinks it onto the Desktop. `npm run app` runs the shell from source. `npm run app:icon` redraws `desktop/icon.icns` and `desktop/icon.png` from `desktop/icon.svg`.
+One Node process per checkout owns the harness: chats, agent jobs, checkpoints and reloads. It serves everything through Vite in middleware mode, using `vite.config.js` and the harness plugin unchanged. The browser and the desktop app are both clients of it, so they share one chat state and one job queue.
 
-- The app is a thin shell. The bundle holds only `package.json` and `desktop/main.js`. At launch it imports Vite from the checkout's `node_modules` and calls `createServer` on the checkout, so the harness plugin, games, chats and checkpoints are the same ones `npm run dev` uses. Changes to `engine/`, `games/` or `harness/` need no rebuild.
-- The checkout path comes from, in order: `WORLD_STUDIO_ROOT`, `~/Library/Application Support/World Studio/config.json`, `desktop/root.json` (written by the package script, gitignored), then the repo itself when unpackaged. If none of them has `vite.config.js` and `node_modules/vite`, a folder picker asks and saves the answer to `config.json`.
-- Port 5199, not 5173 (`desktop/main.js:10`). A terminal dev server and the app can both run, but each has its own harness, so don't prompt the same project from both at once.
-- Finder launches apps with a bare PATH and none of the shell's exports, so `fixPath()` (`desktop/main.js:32`) reads the login shell's environment (`$SHELL -ilc 'env -0'`) and copies PATH and any `DEVCHAT_*` variables (`SHELL_VARS`, `desktop/main.js:31`). It also adds `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`. The resolved `claude` path is written to the log. Any other variable the server reads has to be added to `SHELL_VARS`.
-- Logs: `~/Library/Logs/World Studio/main.log` (console output from the main process, including Vite).
-- Quitting closes the Vite server. The plugin now kills running agent jobs when the HTTP server closes (`harness/server/plugin.js:493`), so a quit doesn't leave a `claude` run editing files.
+- `src/daemon.ts`: `startDaemon({ root, port, strictPort, lock })` makes a Node http server, tries 5173 and up, then mounts Vite with `server: { middlewareMode: true, ws: { server } }`.
+  - Before Vite it rejects any `Host` other than localhost, 127.0.0.1 or [::1] (DNS rebinding).
+  - It answers `/__harness/health` with `{ app, root, pid, version, startedAt }`.
+  - `runDaemonProcess` adds signal handling and reports `ready`, `attached` or `error` to a parent process (an Electron `parentPort` or `process.send`).
+- `src/lock.ts`: `.harness/daemon.json` holds `{ app, pid, port, url, root, version, startedAt }`.
+  - `claimLock` creates it with an exclusive open.
+  - `findDaemon` trusts it only if the pid is alive and the health check returns the same root; otherwise it deletes the lock.
+  - The lock goes away on a clean shutdown.
+- `src/cli.ts`: `bun run dev`. It starts a daemon, or prints the URL of the one already running and exits.
+  - Flags: `--root`, `--port N`, `--strict-port`, and `--no-lock` (a private daemon that ignores the lock; tests use it).
+- Shutdown: `vite.close()` runs the plugin's `closeBundle` hook, which stops agent jobs (`stopJobs`). Middleware mode has no `httpServer`, so the old `httpServer` 'close' hook no longer fires there.
+
+## Desktop app: `apps/desktop/`
+
+`bun run app:install` (`apps/desktop/package.mjs`) packages `World Studio.app` with `@electron/packager`, signs it ad hoc, copies it to `~/Applications` and symlinks it onto the Desktop. `bun run app` runs the shell from source. `bun run app:icon` redraws `icon.icns` and `icon.png` from `icon.svg`.
+
+- The app is a thin shell. The bundle holds only `package.json` and `apps/desktop/main.js`.
+  - At launch `attachOrSpawn()` reads `.harness/daemon.json` through the checkout's `packages/server/src/lock.ts`.
+  - If a daemon is running, the window opens on its URL.
+  - Otherwise the app forks `packages/server/src/cli.ts` in an Electron `utilityProcess` and waits for `ready`.
+  - Changes to `engine/`, `games/`, `harness/` or `packages/` need no rebuild.
+- Quitting stops the daemon only if the app started it: it sends `shutdown` and kills the process after 5 s. A terminal daemon keeps running, and the browser keeps working.
+- `WORLD_STUDIO_ISOLATED=1` makes the app start a private daemon on a free port without the lock. The e2e suite uses it.
+- The checkout path comes from, in order: `WORLD_STUDIO_ROOT`, `~/Library/Application Support/World Studio/config.json`, `apps/desktop/root.json` (written by the package script, gitignored), then the repo itself when unpackaged.
+  - A valid checkout has `vite.config.js`, `packages/server/src/cli.ts` and `node_modules/vite`.
+  - If none of these paths qualifies, a folder picker asks and saves the answer to `config.json`.
+- Finder launches apps with a bare PATH and none of the shell's exports. `fixPath()` reads the login shell's environment (`$SHELL -ilc 'env -0'`), copies PATH and any `DEVCHAT_*` variables (`SHELL_VARS`), and adds `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`.
+  - An app-started daemon inherits that environment, and the resolved `claude` path is written to the log.
+  - Any other variable the server reads has to be added to `SHELL_VARS`.
+- Logs: `~/Library/Logs/World Studio/main.log` (the main process and an app-started daemon's output).
 - Links to other origins open in the default browser. Only one instance runs; opening it again focuses the window.
+- The app's localStorage moved with its origin (it used to be port 5199), so build-mode tips and the props-collapsed flag reset once.
 
-- Parity rule: every change has to work in both the browser and the app. `CLAUDE.md` tells Claude to run the project skill `.claude/skills/parity/SKILL.md` before finishing; it lists where the two differ and how to check each side. `.claude/skills/parity/scripts/cdp.mjs` drives the app window over DevTools (`npx electron . --remote-debugging-port=9333`). The in-app agent skips it.
+- Parity rule: every change has to work in both the browser and the app. `CLAUDE.md` tells Claude to run the project skill `.claude/skills/parity/SKILL.md` before finishing; it lists where the two differ and how to check each side. `bun run test:e2e` covers both. `.claude/skills/parity/scripts/cdp.mjs` drives an app window over DevTools (`npx electron . --remote-debugging-port=9333`). The in-app agent skips it.
 
-Verified on 2026-10-01 (macOS, arm64, Electron 44): the installed app launched with `open`, found `claude` at `~/.local/bin/claude`, served the landing page, and Meridian loaded in build mode in the app window. Not verified: a real prompt run from the app, and pointer lock in the app window (needs a person at the keyboard).
+## Tests: `test/unit/`, `e2e/`
+
+- `test/unit/` (Vitest): rng sequences (Meridian's seed is pinned), collision, GeoBuilder, Tweaks, Selection (including the exact `describe()` text), and the shared zod schemas against the real `.harness/` and `games/` data.
+- `e2e/` (Playwright, `playwright.config.js`): one suite, two projects.
+  - `web` runs a private daemon on port 5180. `electron` launches the app from source with `WORLD_STUDIO_ISOLATED=1`.
+  - Both use `scripts/fake-claude.mjs` as `DEVCHAT_CLAUDE`. Markers in a prompt change what it does: `[slow]`, `[deny]`, `[fail]`, `[noedit]`.
+  - Tests create throwaway projects from Blank and delete them (they land in `.harness/trash/`).
+  - Thumbnail posts are stubbed, so the real games' `thumb.jpg` files stay as they are.
+  - The fixtures call the harness API from Node, not from inside the page: a prompt can reload the page before an in-page fetch resolves.
+  - They navigate with `waitUntil: 'domcontentloaded'`, because `load` waits on the Google Fonts stylesheet.
+
+## Re-architecture
+
+The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Every phase keeps the three games and both surfaces working.
+
+- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`).
+- Next:
+  - P3: Hono API with zod routes, and splitting `harness/server/plugin.js` into domain modules.
+  - P4: shadow-git checkpoints with diffs.
+  - P5: Agent SDK runner behind an `AgentRunner` interface, plus engine `.d.ts` types and a `check_game` tool.
+  - P6: React studio shell (TanStack Router and Query, shadcn, Tailwind v4) with the game in an iframe and a typed postMessage bridge.
+  - P7: build panels in React, live-game MCP tools and permission prompts.
+  - P8: PGlite + Drizzle database and the play-only export.
+- `engine/` stays at the repo root on purpose: games import it by relative path, and the agent's edit rules and old checkpoints use that path.
 
 ## Layout
 
@@ -78,10 +134,13 @@ engine/      shared runtime every game runs on
 games/       one folder per project (games/<slug>/)
 templates/   starting points copied into games/<slug>/ on create
 harness/     dev-only tooling: server plugin, in-game chat, landing page
-.harness/    runtime data: chat logs, checkpoints, screenshots, trash (gitignored)
+packages/    server (studio daemon), shared (zod schemas)
+apps/desktop/ Electron shell for the macOS app
+test/unit/   Vitest unit tests;  e2e/  Playwright suite (web + Electron)
+scripts/     fake-claude.mjs (stand-in agent for tests)
+.harness/    runtime data: chat logs, checkpoints, screenshots, trash, daemon.json (gitignored)
 index.html   landing page shell, loads harness/landing/main.js
 play.html    game page shell, loads engine/runtime.js
-desktop/     Electron shell for the macOS app (electron-app branch)
 CLAUDE.md    project instructions for Claude: run the parity skill before finishing a change
 .claude/     project skills (skills/parity: browser and desktop app parity)
 ```
@@ -126,7 +185,7 @@ Templates are copied, never linked. See Gotchas.
 
 ### `harness/`
 
-- `server/plugin.js` - the Vite plugin. Dev only (`apply: 'serve'`, `harness/server/plugin.js:481`).
+- `server/plugin.js` - the Vite plugin, mounted by the studio daemon. Dev only (`apply: 'serve'`).
 - `client/chat.js`, `client/chat.css` - the in-game chat panel.
 - `landing/main.js`, `landing/landing.css` - the landing page. `landing/registry.prod.js` globs every `game.json` for the production landing page.
 
@@ -157,10 +216,10 @@ The runtime adds its own tweaks after the game's, so the game's show first in th
 All routes sit under `/__harness`.
 
 - `GET /projects` lists projects, newest edit first, with a thumbnail URL and a `running` flag.
-- `POST /projects` creates one from `{ name, template, description }`. It copies `templates/<template>/` into `games/<slug>/` and writes `game.json` (`harness/server/plugin.js:304`). If a description was given, Claude builds it as the project's first prompt.
-- `POST /projects/<slug>/rename`, `/duplicate` and `/delete`. Delete moves the folder to `.harness/trash/` and refuses while Claude is working on that project (`harness/server/plugin.js:396`).
+- `POST /projects` creates one from `{ name, template, description }`. It copies `templates/<template>/` into `games/<slug>/` and writes `game.json` (`createProject` in `harness/server/plugin.js`). If a description was given, Claude builds it as the project's first prompt.
+- `POST /projects/<slug>/rename`, `/duplicate` and `/delete`. Delete moves the folder to `.harness/trash/` and refuses while Claude is working on that project (the `delete` route in `harness/server/plugin.js`).
 - `GET /templates` lists folders in `templates/` that have a `game.js`.
-- `GET /settings` returns the studio settings and `POST /settings` takes `{ alwaysEngine }`. It writes `.harness/settings.json` and sends a `harness:settings` HMR event so open tabs on the same server update (`harness/server/plugin.js:364`).
+- `GET /settings` returns the studio settings and `POST /settings` takes `{ alwaysEngine }`. It writes `.harness/settings.json` and sends a `harness:settings` HMR event so open tabs on the same server update (the `/settings` route in `harness/server/plugin.js`).
 - `POST /shot`, `/thumb` and `/tweaks` take `{ slug, ... }`. They write a screenshot to `.harness/shots/<slug>/`, `thumb.jpg`, or `tweaks.json`.
 
 The server sends two custom HMR events. `harness:projects` tells the landing page to re-render. `harness:reload` tells game tabs to reload (see Reloads).
@@ -174,7 +233,7 @@ The server sends two custom HMR events. `harness:projects` tells the landing pag
 
 ### Claude runs
 
-`run()` (`harness/server/plugin.js:177`) spawns the CLI headless in the project root:
+`run()` in `harness/server/plugin.js` spawns the CLI headless in the project root:
 
 ```
 claude -p <prompt> --output-format stream-json --verbose --permission-mode default
@@ -183,34 +242,35 @@ claude -p <prompt> --output-format stream-json --verbose --permission-mode defau
   [--resume <sessionId>]
 ```
 
-- Engine edits add `Edit(engine/**)` and `Write(engine/**)`. A prompt gets them when the client sends `engine: true` ("Allow engine edits", one prompt) or when the `alwaysEngine` setting is on. The server checks the setting itself in `run()` (`harness/server/plugin.js:179`), so it also covers a new project's first build from the landing page.
-- `systemPrompt()` (`harness/server/plugin.js:33`) names the game folder, says whether engine edits are allowed, tells Claude to read `engine/API.md`, to expose tweaks and selectables, to keep `snapshot()`/`restore()` current, and not to start servers or tell the user to refresh.
+- Engine edits add `Edit(engine/**)` and `Write(engine/**)`. A prompt gets them when the client sends `engine: true` ("Allow engine edits", one prompt) or when the `alwaysEngine` setting is on. The server checks the setting itself in `run()`, so it also covers a new project's first build from the landing page.
+- `systemPrompt()` names the game folder, says whether engine edits are allowed, tells Claude to read `engine/API.md`, to expose tweaks and selectables, to keep `snapshot()`/`restore()` current, and not to start servers or tell the user to refresh.
 - Each project keeps its own Claude session and resumes it. The chat's New button clears it.
-- The child gets `WORLD_STUDIO_AGENT=1` (`harness/server/plugin.js:193`). The user's global `~/.claude/hooks/handoff-stop.mjs` exits early when it's set, so these short runs don't trigger the handoff Stop hook.
+- The child gets `WORLD_STUDIO_AGENT=1` (the `spawn` call in `run()`). The user's global `~/.claude/hooks/handoff-stop.mjs` exits early when it's set, so these short runs don't trigger the handoff Stop hook.
 - `DEVCHAT_MODEL` adds `--model`, and `DEVCHAT_CLAUDE` sets the CLI path.
-- Path-scoped permissions were checked with a CLI spike: edits outside the allowed folder are denied. Denied paths show up in the chat as a status line, "Blocked outside this game: ..." (`harness/server/plugin.js:224`).
+- Path-scoped permissions were checked with a CLI spike: edits outside the allowed folder are denied. Denied paths show up in the chat as a status line, "Blocked outside this game: ..." (the `result` handler in `run()`).
 - Stop sends SIGTERM. The chat then says "Stopped. Open Checkpoints to undo any partial edits."
 
 ### Checkpoints
 
-- Before every prompt, `checkpoint()` (`harness/server/plugin.js:111`) copies `games/<slug>/` (minus `thumb.jpg`), plus `engine/` when engine edits are allowed, into `.harness/checkpoints/<slug>/<id>/` with a `meta.json` holding the prompt, the time and the engine flag.
-- It keeps the newest 30 per project (`harness/server/plugin.js:17`).
-- `restoreCheckpoint()` (`harness/server/plugin.js:129`) first saves a "Before restoring: ..." checkpoint, so a restore can be undone. It then replaces the game folder (and `engine/` if the checkpoint has it), keeps the current thumbnail and reloads the affected tabs.
+- Before every prompt, `checkpoint()` copies `games/<slug>/` (minus `thumb.jpg`), plus `engine/` when engine edits are allowed, into `.harness/checkpoints/<slug>/<id>/` with a `meta.json` holding the prompt, the time and the engine flag.
+- It keeps the newest 30 per project (`MAX_CHECKPOINTS`).
+- `restoreCheckpoint()` first saves a "Before restoring: ..." checkpoint, so a restore can be undone. It then replaces the game folder (and `engine/` if the checkpoint has it), keeps the current thumbnail and reloads the affected tabs.
 - Restore refuses while a job is running.
 
 ### Reloads
 
-- The `hotUpdate` hook (`harness/server/plugin.js:510`) takes over reloads for code files in `games/` and `engine/` (`.js`, `.mjs`, `.json`, `.html`, `.glsl`, `.frag`, `.vert`) and returns `[]`, so Vite does no reload of its own.
+- The plugin's `hotUpdate` hook takes over reloads for code files in `games/` and `engine/` (`.js`, `.mjs`, `.json`, `.html`, `.glsl`, `.frag`, `.vert`) and returns `[]`, so Vite does no reload of its own.
 - A changed file in `games/<slug>/` queues a reload for that slug. A changed file in `engine/` queues one for every tab.
-- While any Claude job runs, in any project, queued reloads wait. When the last job ends, `flush()` (`harness/server/plugin.js:159`) invalidates the changed modules, logs a reload line in the chat and sends one `harness:reload` with `{ slugs: [...] }` or `{ all: true }`. With no job running, a change flushes after a 180 ms debounce.
+- While any Claude job runs, in any project, queued reloads wait. When the last job ends, `flush()` invalidates the changed modules, logs a reload line in the chat and sends one `harness:reload` with `{ slugs: [...] }` or `{ all: true }`. With no job running, a change flushes after a 180 ms debounce.
 - The runtime checks the slug and reloads only matching tabs (`engine/runtime.js:390`).
 - `game.json`, `tweaks.json` and `thumb.jpg` never reload a game. A `game.json` change only refreshes the landing page.
 
 ### Security
 
-- Requests must come from a loopback address (`harness/server/plugin.js:347`).
-- POSTs need the header `X-Devchat: 1` and an `Origin` whose host matches `Host` (`harness/server/plugin.js:352`). This blocks cross-site requests.
-- The Vite config has no `host: true`, so the dev server isn't reachable from the LAN. Keep it that way: the chat can edit files.
+- The daemon rejects any `Host` header other than localhost, 127.0.0.1 or [::1] before Vite sees the request, which closes the DNS-rebinding gap the Origin check alone left open.
+- Requests must come from a loopback address (`handler` in `harness/server/plugin.js`).
+- POSTs need the header `X-Devchat: 1` and an `Origin` whose host matches `Host` (`handler` in `harness/server/plugin.js`). This blocks cross-site requests.
+- The daemon listens on `localhost` only, so it isn't reachable from the LAN. Keep it that way: the chat can edit files.
 
 ### Cost
 
@@ -218,7 +278,7 @@ Each prompt is a real Claude Code run billed to the user's account. A tiny edit 
 
 ## Chat client: `harness/client/chat.js`
 
-- `transformIndexHtml` injects it only into play pages, with `head-prepend` (`harness/server/plugin.js:506`). It loads before the game and keeps working when the game crashes.
+- `transformIndexHtml` injects it only into play pages, with `head-prepend` (the plugin's `transformIndexHtml`). It loads before the game and keeps working when the game crashes.
 - Backtick toggles the Ask panel. The "Ask" tab on the right edge does too. The panel has Chat and Checkpoints tabs and a ⋯ menu.
 - Enter in play or build mode opens a one-line quick prompt bar and keeps pointer lock.
 - A status pill in the bottom-left shows progress while the panel is closed.
@@ -293,11 +353,13 @@ Dev server only: Enter opens the quick prompt bar, backtick toggles the chat pan
 
 - Edit permissions for the agent use absolute paths (`Edit(//<abs>/games/<slug>/**)`). Relative rules resolve against Claude's current directory, so one `cd games/<slug>` in a shell command made the game's own files unwritable (seen on 2026-10-01 in the Meridian penthouse prompt).
 
-- Engine CSS edits go through Vite's normal CSS HMR. The harness doesn't intercept them (`harness/server/plugin.js:517`).
+- Engine CSS edits go through Vite's normal CSS HMR. The harness doesn't intercept them (the `CODE_FILE` check in `hotUpdate`).
 - Editing `harness/server/plugin.js` or `vite.config.js` restarts the Vite server. Open tabs reload through Vite's own reconnect, with no snapshot guarantee. The chat shows "dev server offline" for a moment.
 - Editing `templates/` never reloads anything. Templates are copied only when a project is created, so changing a template doesn't change existing games.
 - `games/<slug>/game.json`, `tweaks.json` and `thumb.jpg` changes never reload a game.
 - One Claude job per project at a time. While any job runs, in any project, all pending reloads wait until it finishes.
+- Copying a template or duplicating a project writes files the watcher reports a second or two later, once per Vite environment (client and ssr). `markFresh()` records each copied file's mtime, and `hotUpdate` skips events for a file whose mtime still matches, so a new project's tab doesn't reload on its own.
+- `node_modules/.package-lock.json` (left behind by npm) makes Vite hash a different lockfile depending on who launched it, re-optimize deps on every start, and reload open pages. Since the move to bun it must not exist; `bun install` doesn't recreate it.
 - Production-only globs live in the `registry.prod.js` files and load through dynamic `import()`, so the dev server never watches them. A static glob made every project creation reload every tab.
 - Per-game RNG: Meridian uses its own `games/meridian-city/rng.js`, seeded 20260930 (`games/meridian-city/rng.js:4`). Changing the order of `rand()` calls regenerates a different city. It also breaks reload restore of collected cores, which are matched by position within 1 m (`games/meridian-city/game.js:154`).
 - `ctx.rng` is seeded from the slug, so a duplicated project using `ctx.rng` generates a different world from the original. Meridian's own RNG sidesteps this.

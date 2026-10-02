@@ -10,18 +10,19 @@
     "engine"
   ],
   "productName": "World Studio",
-  "main": "desktop/main.js",
+  "main": "apps/desktop/main.js",
   "scripts": {
-    "dev": "vite",
+    "dev": "node packages/server/src/cli.ts",
     "build": "vite build",
     "preview": "vite preview",
     "app": "electron .",
-    "app:install": "node desktop/package.mjs",
-    "app:icon": "electron desktop/make-icon.mjs",
+    "app:install": "node apps/desktop/package.mjs",
+    "app:icon": "electron apps/desktop/make-icon.mjs",
     "test": "vitest run",
     "test:e2e": "vite build && playwright test",
     "lint": "biome lint .",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "dev:vite": "vite"
   },
   "dependencies": {
     "three": "^0.186.1"

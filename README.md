@@ -7,25 +7,27 @@ Built with Three.js 0.186 and Vite 8, in plain JavaScript modules with no framew
 ## Run it
 
 ```sh
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
-Open the URL Vite prints. The configured port is 5173, but Vite moves to the next free port if that one is taken.
+Open the URL it prints. The studio server uses port 5173, or the next free port if that one is taken. If a studio server is already running for this checkout (from another terminal or the desktop app), `bun run dev` prints its URL instead of starting a second one.
+
+`bun run test` runs the unit tests and `bun run test:e2e` runs the browser and desktop end-to-end suite with a stand-in agent, so it costs nothing.
 
 The chat needs the `claude` CLI installed and logged in.
 
 ### Desktop app (macOS)
 
 ```sh
-npm run app:install
+bun run app:install
 ```
 
-This builds `World Studio.app`, installs it in `~/Applications` and puts a link on the Desktop. Double-click it and the studio opens in its own window. It runs the same Vite server and harness as `npm run dev`, but in the app's own process on port 5199, so it can run alongside a terminal dev server. The app points at this checkout: games, chats and checkpoints stay in this folder. Rebuild it only after changing `desktop/main.js` or the icon. `npm run app` runs it from source without packaging.
+This builds `World Studio.app`, installs it in `~/Applications` and puts a link on the Desktop. Double-click it and the studio opens in its own window. The app and `bun run dev` share one studio server: if one is already running for this checkout, the other attaches to it, so a browser tab and the app window see the same chats, settings and running prompts. If the app started the server, quitting the app stops it. The app points at this checkout: games, chats and checkpoints stay in this folder. Rebuild it only after changing `apps/desktop/main.js` or the icon. `bun run app` runs it from source without packaging.
 
 Logs go to `~/Library/Logs/World Studio/main.log`.
 
-`npm run build` makes a production build in `dist/`, and `npm run preview` serves it. The production build plays the games but has no chat, no project editing and no saving.
+`bun run build` makes a production build in `dist/`, and `bun run preview` serves it. The production build plays the games but has no chat, no project editing and no saving.
 
 ## How to use it
 
@@ -91,6 +93,6 @@ Chat (dev server only): backtick toggles the panel, and Enter opens the quick pr
 
 ## Cost and safety
 
-Each prompt is a real Claude Code run billed to your account. The harness runs only under `npm run dev`, accepts requests only from this machine, and isn't part of production builds.
+Each prompt is a real Claude Code run billed to your account. The harness runs only under `bun run dev`, accepts requests only from this machine, and isn't part of production builds.
 
 See [HANDOFF.md](HANDOFF.md) for how the code is organized and how the harness works, and [engine/API.md](engine/API.md) for the contract a game follows.

@@ -3,5 +3,7 @@ dist
 .playwright-mcp
 .harness
 .DS_Store
-desktop/out
-desktop/root.json
+apps/desktop/out
+apps/desktop/root.json
+test-results
+playwright-report

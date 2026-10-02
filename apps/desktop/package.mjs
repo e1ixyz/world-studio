@@ -1,7 +1,7 @@
 // Builds "World Studio.app", installs it to ~/Applications and puts a link on the Desktop.
-// Run with: npm run app:install
-// The app is a thin shell: it runs this checkout's Vite + harness in place, so games, engine
-// edits and node_modules all stay here. Rebuild only when desktop/main.js or the icon changes.
+// Run with: bun run app:install
+// The app is a thin shell: it attaches to (or starts) this checkout's studio daemon, so games,
+// engine edits and node_modules all stay here. Rebuild only when apps/desktop/main.js or the icon changes.
 import { packager } from '@electron/packager';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -10,9 +10,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, '..');
+const root = path.resolve(here, '../..');
 const NAME = 'World Studio';
-const KEEP = new Set(['/package.json', '/desktop', '/desktop/main.js', '/desktop/root.json']);
+const KEEP = new Set(['/package.json', '/apps', '/apps/desktop', '/apps/desktop/main.js', '/apps/desktop/root.json']);
 
 fs.writeFileSync(path.join(here, 'root.json'), JSON.stringify({ root }, null, 2));
 

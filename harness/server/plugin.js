@@ -54,6 +54,19 @@ export default function harness() {
   const pending = new Map(); // file -> slug or '*'
   let flushTimer = null;
   let suppressUntil = 0;
+  // Files the harness itself just wrote by copying (new project, duplicate), with their mtime.
+  // The watcher can report those a second or two later; they must not reload the new tab.
+  const fresh = new Map();
+  function markFresh(dir) {
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) walk(p);
+        else fresh.set(p, fs.statSync(p).mtimeMs);
+      }
+    };
+    walk(dir);
+  }
 
   const gameDir = (slug) => path.join(P.games, slug);
   const exists = (slug) => SLUG_RE.test(slug) && fs.existsSync(path.join(gameDir(slug), 'game.js'));
@@ -306,6 +319,7 @@ export default function harness() {
     if (!fs.existsSync(path.join(P.templates, template || '', 'game.js'))) throw new Error('Unknown template');
     const slug = uniqueSlug(name);
     fs.cpSync(path.join(P.templates, template), gameDir(slug), { recursive: true });
+    markFresh(gameDir(slug));
     const tmeta = readJSON(path.join(P.templates, template, 'game.json'), {});
     writeJSON(path.join(gameDir(slug), 'game.json'), {
       name, template, description: String(description || '').trim() || tmeta.description || '', created: Date.now(), updated: Date.now(),
@@ -388,6 +402,7 @@ export default function harness() {
           const name = String(body.name || `${meta.name || slug} copy`).trim();
           const copy = uniqueSlug(name);
           fs.cpSync(gameDir(slug), gameDir(copy), { recursive: true });
+          markFresh(gameDir(copy));
           writeJSON(path.join(gameDir(copy), 'game.json'), { ...meta, name, created: Date.now(), updated: Date.now() });
           sendEvent('harness:projects', {});
           return json(res, 200, { slug: copy });
@@ -476,9 +491,14 @@ export default function harness() {
     next();
   }
 
+  function stopJobs() {
+    for (const c of chats.values()) c.job?.child.kill('SIGTERM');
+  }
+
   return {
     name: 'world-studio',
     apply: 'serve',
+    closeBundle: stopJobs, // runs on server.close()
     configResolved(config) {
       root = config.root;
       P.games = path.join(root, 'games');
@@ -489,10 +509,9 @@ export default function harness() {
     },
     configureServer(s) {
       server = s;
-      // don't leave agent runs behind when the server shuts down (e.g. the desktop app quits)
-      s.httpServer?.once('close', () => {
-        for (const c of chats.values()) c.job?.child.kill('SIGTERM');
-      });
+      // don't leave agent runs behind when the server shuts down (e.g. the desktop app quits).
+      // In middleware mode (the studio daemon) there is no httpServer; closeBundle covers that.
+      s.httpServer?.once('close', stopJobs);
       // /play/<slug> serves the game runtime
       s.middlewares.use((req, res, next) => {
         const m = req.url.match(/^\/play\/([\w-]+)\/?(\?.*)?$/);
@@ -516,6 +535,11 @@ export default function harness() {
       if (top !== 'games' && top !== 'engine') return;
       if (!CODE_FILE.test(file)) return; // css and assets: Vite's own HMR
       if (Date.now() < suppressUntil) return [];
+      if (fresh.has(file)) {
+        // the watcher can send both a create and a change for one copy; skip both
+        if (fs.statSync(file, { throwIfNoEntry: false })?.mtimeMs === fresh.get(file)) return [];
+        fresh.delete(file);
+      }
       if (top === 'games') {
         if (!slug || GAME_DATA.has(name)) {
           if (name === 'game.json') sendEvent('harness:projects', {});
