@@ -5,6 +5,7 @@
 import { app, BrowserWindow, dialog, shell, utilityProcess } from 'electron';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -12,6 +13,22 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 let daemon = null; // the utilityProcess, only when this app started the daemon
 let win = null;
 let origin = '';
+
+// Isolated (test) runs get a throwaway profile and log folder, so they don't share the installed app's
+// single-instance lock (which made them quit at launch while it was open) or its localStorage and log.
+const scratch = process.env.WORLD_STUDIO_ISOLATED === '1' ? fs.mkdtempSync(path.join(os.tmpdir(), 'world-studio-test-')) : null;
+if (scratch) {
+  // Chromium can still write its cache after the quit handler below, so sweep old runs' folders too
+  for (const name of fs.readdirSync(os.tmpdir())) {
+    const dir = path.join(os.tmpdir(), name);
+    if (name.startsWith('world-studio-test-') && dir !== scratch && Date.now() - fs.statSync(dir).mtimeMs > 3_600_000) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  app.setPath('userData', path.join(scratch, 'profile'));
+  app.setPath('logs', path.join(scratch, 'logs'));
+  app.on('quit', () => fs.rmSync(scratch, { recursive: true, force: true }));
+}
 
 // --- logging: no terminal when launched from Finder, so mirror console to a file
 const logFile = path.join(app.getPath('logs'), 'main.log');
@@ -128,6 +145,10 @@ async function attachOrSpawn(root) {
   return msg.url;
 }
 
+// e2e runs set WORLD_STUDIO_HIDDEN=1: the window never shows and the app stays out of the Dock, so test
+// runs don't flash windows or take focus. It still renders and runs timers as if it were in front.
+const hidden = process.env.WORLD_STUDIO_HIDDEN === '1';
+
 function createWindow(url) {
   origin = new URL(url).origin;
   win = new BrowserWindow({
@@ -138,9 +159,9 @@ function createWindow(url) {
     title: 'World Studio',
     backgroundColor: '#05080d',
     show: false,
-    webPreferences: { contextIsolation: true, sandbox: true },
+    webPreferences: { contextIsolation: true, sandbox: true, backgroundThrottling: !hidden },
   });
-  win.once('ready-to-show', () => win.show());
+  if (!hidden) win.once('ready-to-show', () => win.show());
   win.on('closed', () => (win = null));
 
   // Links that leave the app open in the default browser.
@@ -163,6 +184,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.setName('World Studio');
+  if (hidden) app.dock?.hide();
   app.on('second-instance', () => {
     if (!win) return;
     if (win.isMinimized()) win.restore();

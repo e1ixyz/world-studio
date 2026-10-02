@@ -13,7 +13,7 @@ export const test = base.extend({
     const app = await _electron.launch({
       args: [ROOT],
       cwd: ROOT,
-      env: { ...process.env, DEVCHAT_RUNNER: 'fake', WORLD_STUDIO_ROOT: ROOT, WORLD_STUDIO_ISOLATED: '1' },
+      env: { ...process.env, DEVCHAT_RUNNER: 'fake', WORLD_STUDIO_ROOT: ROOT, WORLD_STUDIO_ISOLATED: '1', WORLD_STUDIO_HIDDEN: '1' },
     });
     await use(app);
     await app.close();

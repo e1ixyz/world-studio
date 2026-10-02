@@ -92,7 +92,7 @@ One Node process per checkout owns the harness: chats, agent jobs, checkpoints a
   - Otherwise the app forks `packages/server/src/cli.ts` in an Electron `utilityProcess` and waits for `ready`.
   - Changes to `engine/`, `games/`, `harness/` or `packages/` need no rebuild.
 - Quitting stops the daemon only if the app started it: it sends `shutdown` and kills the process after 5 s. A terminal daemon keeps running, and the browser keeps working.
-- `WORLD_STUDIO_ISOLATED=1` makes the app start a private daemon on a free port without the lock. The e2e suite uses it.
+- `WORLD_STUDIO_ISOLATED=1` makes the app start a private daemon on a free port without the lock, with a throwaway profile and log folder in `$TMPDIR/world-studio-test-*` (so it doesn't share the installed app's single-instance lock, localStorage or `main.log`; folders over an hour old are swept on the next isolated launch). `WORLD_STUDIO_HIDDEN=1` never shows the window and hides the Dock icon, with background throttling off so it still renders at full rate. The e2e suite sets both.
 - The checkout path comes from, in order: `WORLD_STUDIO_ROOT`, `~/Library/Application Support/World Studio/config.json`, `apps/desktop/root.json` (written by the package script, gitignored), then the repo itself when unpackaged.
   - A valid checkout has `vite.config.js`, `packages/server/src/cli.ts` and `node_modules/vite`.
   - If none of these paths qualifies, a folder picker asks and saves the answer to `config.json`.
@@ -130,7 +130,7 @@ Drizzle with a Postgres schema (`src/schema.ts`) and generated migrations (`driz
 
 - `test/unit/` (Vitest): rng sequences (Meridian's seed is pinned), collision, GeoBuilder, Tweaks, Selection (including the exact `describe()` text), and the shared zod schemas against the real `.harness/` and `games/` data.
 - `e2e/` (Playwright, `playwright.config.js`): one suite, two projects.
-  - `web` runs a private daemon on port 5180. `electron` launches the app from source with `WORLD_STUDIO_ISOLATED=1`.
+  - `web` runs a private daemon on port 5180. `electron` launches the app from source with `WORLD_STUDIO_ISOLATED=1` and `WORLD_STUDIO_HIDDEN=1`: no window appears, nothing takes focus, and it runs fine while `World Studio.app` is open.
   - Both run the in-process fake agent (`DEVCHAT_RUNNER=fake`, `domain/agent/fake-runner.ts`). Markers in a prompt change what it does: `[slow]`, `[deny]`, `[fail]`, `[noedit]`, `[view]`, `[ask]`, `[reload]`.
   - Tests create throwaway projects from Blank and delete them (they land in `.harness/trash/`).
   - Thumbnail posts are stubbed, so the real games' `thumb.jpg` files stay as they are.
@@ -532,7 +532,8 @@ Dev server only: Enter opens the quick prompt bar, backtick toggles the chat pan
 - `games/<slug>/game.json`, `tweaks.json` and `thumb.jpg` changes never reload a game.
 - One Claude job per project at a time. While any job runs, in any project, all pending reloads wait until it finishes.
 - Copying a template or duplicating a project writes files the watcher reports a second or two later, once per Vite environment (client and ssr). `ReloadCoordinator.markFresh()` records each copied file's mtime and skips events while it still matches, so a new project's tab doesn't reload on its own.
-- Only one copy of the Electron shell runs at a time (`app.requestSingleInstanceLock()` in `apps/desktop/main.js`). While `World Studio.app` is open, `npx electron .` and every `[electron]` e2e test quit at launch ("Target page, context or browser has been closed"). Quit the app before `bun run test:e2e` or a CDP check.
+- Only one copy of the Electron shell runs per profile (`app.requestSingleInstanceLock()` in `apps/desktop/main.js`). The e2e suite has its own profile, but a manual source run (`npx electron . --remote-debugging-port=9333` for a CDP check) shares the installed app's, so it quits at launch while `World Studio.app` is open. Quit the app first, and reopen it after only if the user had it open. Don't cycle the user's app or flash windows needlessly: on 2026-10-02 repeated quits, reopens and visible e2e windows read as the app "opening and freaking out".
+- Not fixed yet: `bun run export <slug>` writes `exports/<slug>/` inside the checkout, and the studio's Vite watcher sees it and reloads every open studio page (seen 2026-10-02: `page reload exports/medieval-village/index.html` in `.harness/daemon.log`). Adding `exports/` to the watcher's ignore list would fix it.
 - `node_modules/.package-lock.json` (left behind by npm) makes Vite hash a different lockfile depending on who launched it, re-optimize deps on every start, and reload open pages. Since the move to bun it must not exist; `bun install` doesn't recreate it.
 - Production-only globs live in the `registry.prod.js` files and load through dynamic `import()`, so the dev server never watches them. A static glob made every project creation reload every tab.
 - Per-game RNG: Meridian uses its own `games/meridian-city/rng.js`, seeded 20260930 (`games/meridian-city/rng.js:4`). Changing the order of `rand()` calls regenerates a different city. It also breaks reload restore of collected cores, which are matched by position within 1 m (`games/meridian-city/game.js:154`).
