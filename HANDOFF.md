@@ -6,7 +6,7 @@ World Studio is a harness for building browser 3D games with Claude while they r
 
 Until today (2026-09-30) this repo was a single game, Meridian City. It was restructured into World Studio the same day, and Meridian now lives in `games/meridian-city/` as the first game on the engine contract. Three.js 0.186 and Vite 8, no asset files. The engine and games are plain JS ES modules (typed through `engine/types.d.ts`); the studio is TypeScript: a bun workspace with one studio daemon (Hono, Vite in middleware mode, PGlite) shared by the browser and the desktop app, a React studio UI with the game in a frame, and the Claude Agent SDK. The re-architecture that got it there (P0-P8) finished on 2026-10-02; see Re-architecture below. User-facing overview and controls are in [README.md](README.md). The engine contract for games is [engine/API.md](engine/API.md); this file links to it rather than repeating it.
 
-The repo is private on GitHub at `e1ixyz/world-studio`. Work happens on the `architecture` branch, which branches off `electron-app` (which has the macOS desktop app); `main` was fast-forwarded to `electron-app` on 2026-10-02. A backup of the pre-restructure project is at `.harness/backup-pre-harness.tar.gz`.
+The repo is private on GitHub at `e1ixyz/world-studio`. `main` has everything: the re-architecture, the desktop app and the themes were fast-forwarded into it from the `architecture` branch on 2026-10-02. `electron-app` and `architecture` are older working branches. A backup of the pre-restructure project is at `.harness/backup-pre-harness.tar.gz`.
 
 ## Current state
 
