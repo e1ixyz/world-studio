@@ -17,6 +17,8 @@ const TINTS = {
   brick: ['#ffffff', '#f0cdbb', '#d69c86', '#f3dcc0', '#c9b1a6'],
   modern: ['#ffffff', '#c9cdd6', '#b5ab9b', '#a9b6c4'],
 };
+// facade colors for specific buildings, keyed by building index
+const PAINTED = { 1283: '#d23a2e', 1284: '#d23a2e' };
 const NEON = ['#ff2d6f', '#2de2ff', '#ffd02d', '#7dff4a', '#b34dff', '#ff7a1a', '#ff4df0'];
 const TREE_GREENS = ['#3f7d2c', '#4f8a33', '#2f6b2a', '#5e9a3a', '#3b6f36', '#6d8f2f'];
 const WHITE = [1, 1, 1];
@@ -64,7 +66,9 @@ export function buildCity(scene, T) {
 
   // ---------- buildings ----------
   function addBuilding(ch, x0, x1, z0, z1, h, style) {
-    const tint = c3(pick(TINTS[style]), rr(0.8, 1.06));
+    let tint = c3(pick(TINTS[style]), rr(0.8, 1.06));
+    const paint = PAINTED[buildings.length]; // index matches the build-mode "#n" id
+    if (paint) tint = c3(paint);
     const rk = rr(0.7, 1.05);
     const roofCol = [rk, rk, rk * 0.97];
     const uo = ri(0, 7) / 8;

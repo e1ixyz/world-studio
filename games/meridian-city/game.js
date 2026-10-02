@@ -77,6 +77,12 @@ export default defineGame({
     tweaks.add('Traffic / Car speed ×', { value: 1, min: 0, max: 3, step: 0.05, onChange: (v) => (vehicles.speedScale = v) });
     tweaks.add('Traffic / Pedestrian speed ×', { value: 1, min: 0, max: 3, step: 0.05, onChange: (v) => (peds.speedScale = v) });
     tweaks.add('City / Window glow at night', { value: 0.75, min: 0, max: 3, step: 0.05, onChange: (v) => (city.glow = v) });
+    // crash explosions: a sudden velocity change this big in one frame blows the car up
+    let explodeOn = true, crashForce = 24;
+    tweaks.add('Driving / Explode on crash', { value: true, onChange: (v) => (explodeOn = v) });
+    tweaks.add('Driving / Crash force to explode', { value: 24, min: 8, max: 60, step: 1, onChange: (v) => (crashForce = v) });
+    let lastCar = null;
+    const lastV = { x: 0, z: 0 };
     tweaks.add('Cores / Beam opacity', { value: 0.55, min: 0, max: 1, step: 0.01, onChange: (v) => (cores.beamMat.opacity = v) });
     tweaks.add('Cores / Beam color', { value: '#3cf2ff', onChange: (v) => cores.beamMat.color.set(v) });
     // the default sun halo is wide enough to wash the skyline out when looking sunward
@@ -115,6 +121,24 @@ export default defineGame({
 
       update(dt, t, { player, started, mode }) {
         const walker = !started || player.driving || player.altitude > 2.5 ? null : player.pos;
+        const car = player.driving ? player.car : null;
+        if (car && car === lastCar && explodeOn && Math.hypot(car.vx - lastV.x, car.vz - lastV.z) > crashForce) {
+          player.exit(true);
+          vehicles.explode(car);
+          // blast the player clear of the wreck
+          const dx = player.pos.x - car.x, dz = player.pos.z - car.z, d = Math.hypot(dx, dz) || 1;
+          player.vel.set((dx / d) * 9, 8.5, (dz / d) * 9);
+          player.onGround = false;
+          audio.crash(40);
+          audio.noise(1.8, 160, 'lowpass', 1);
+          audio.noise(0.9, 900, 'lowpass', 0.7);
+          hud.toast('<span style="color:#ff7a3a">Wrecked!</span>');
+        }
+        lastCar = player.driving ? player.car : null;
+        if (lastCar) {
+          lastV.x = lastCar.vx;
+          lastV.z = lastCar.vz;
+        }
         vehicles.update(dt, walker);
         peds.update(dt, t);
         if (mode === 'play' && !finished) elapsed += dt;

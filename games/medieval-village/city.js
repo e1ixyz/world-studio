@@ -19,6 +19,8 @@ const ROOFS = ['#b5543a', '#a8482f', '#c0673f', '#9c4a33', '#b86b45', '#8f3f2c',
 const ROOFS_FLEA = ['#7d6a4c', '#8b7a55', '#6b5e48', '#945a3c', '#7a4a34'];
 const WOOD = '#8a6446';
 const PLAIN_UV = [0.02, 0.15, 0.03, 0.15, 0.03, 0.2, 0.02, 0.2];
+// Per-house wall color overrides, keyed by house index (the #id shown when selecting a house).
+const HOUSE_COLORS = { 775: '#b8352a' };
 
 export function buildCity(scene, T, grid) {
   const houses = [];
@@ -47,7 +49,8 @@ export function buildCity(scene, T, grid) {
     const nearKeep = Math.hypot(cx - KEEP.x, cz - KEEP.z) < 140;
     const stories = flea ? (rand() < 0.6 ? 1 : 2) : rand() < 0.2 ? 1 : rand() < (nearKeep ? 0.4 : 0.65) ? 2 : rand() < 0.8 ? 3 : 4;
     const top = g1 + stories * WALL_TH + 0.25;
-    const col = c3(pick(flea ? PLASTER_FLEA : PLASTER), rr(0.86, 1.04));
+    let col = c3(pick(flea ? PLASTER_FLEA : PLASTER), rr(0.86, 1.04));
+    if (HOUSE_COLORS[houses.length]) col = c3(HOUSE_COLORS[houses.length]);
     const roofCol = c3(pick(flea ? ROOFS_FLEA : ROOFS), rr(0.82, 1.08));
     const B = chunk(cx, cz);
     const wallOpts = { col, tw: WALL_TW, th: WALL_TH, uo: ri(0, 3) / 4, vo: -top / WALL_TH, top: false };

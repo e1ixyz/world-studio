@@ -84,6 +84,14 @@ export class Vehicles {
     this.rainbow = [229, 211].map((k) => this.list[k]).filter(Boolean);
     this.rainbowT = 0;
     this.tmpColor = c;
+    // crash explosion effects
+    this.fx = [];
+    this.wrecks = [];
+    this.fxGroup = new THREE.Group();
+    this.puffGeo = new THREE.IcosahedronGeometry(1, 1);
+    this.chunkGeo = new THREE.BoxGeometry(0.5, 0.18, 0.4);
+    this.debrisMat = new THREE.MeshStandardMaterial({ color: 0x1e1c1a, roughness: 0.8, metalness: 0.3 });
+    scene.add(this.fxGroup);
     for (const m of [this.body, this.detail, this.lights]) {
       m.frustumCulled = false;
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -252,6 +260,7 @@ export class Vehicles {
       v.vx = fx * v.speed;
       v.vz = fz * v.speed;
     }
+    this.updateFx(dt);
     for (const v of this.list) if (v.mode !== 'parked' || v.dirty) this.writeMatrix(v);
     this.body.instanceMatrix.needsUpdate = true;
     this.detail.instanceMatrix.needsUpdate = true;
@@ -259,6 +268,7 @@ export class Vehicles {
     if (this.rainbow.length) {
       this.rainbowT += dt;
       for (const v of this.rainbow) {
+        if (v.wrecked) continue;
         v.color = `#${this.tmpColor.setHSL((this.rainbowT * 0.3 + v.k * 0.13) % 1, 0.9, 0.55).getHexString()}`;
         this.body.setColorAt(v.k, this.tmpColor);
       }
@@ -274,13 +284,132 @@ export class Vehicles {
     d.updateMatrix();
     this.body.setMatrixAt(v.k, d.matrix);
     this.detail.setMatrixAt(v.k, d.matrix);
+    if (v.wrecked) d.scale.setScalar(0), d.updateMatrix(); // burnt out: no head/tail lights
     this.lights.setMatrixAt(v.k, d.matrix);
     v.dirty = false;
+  }
+
+  // ---------- crash explosions ----------
+  explode(v) {
+    const R = Math.random; // visual only, so it doesn't need the seeded world RNG
+    v.wrecked = true;
+    v.mode = 'parked';
+    v.vx = v.vz = v.speed = 0;
+    v.color = '#1c1a19';
+    this.body.setColorAt(v.k, this.tmpColor.set(v.color));
+    this.body.instanceColor.needsUpdate = true;
+    v.hop = { vy: 7.5, y0: v.y };
+    v.roll = (R() - 0.5) * 0.16;
+    v.pitch = (R() - 0.5) * 0.1;
+    v.burn = 12;
+    v.emit = 0;
+    v.dirty = true;
+    this.wrecks.push(v);
+    const y = v.y + 1;
+    for (let i = 0; i < 8; i++) {
+      this.puff('fire', v.x + (R() - 0.5) * 3, y + R() * 1.4, v.z + (R() - 0.5) * 3, { life: 0.45 + R() * 0.5, size: 2.4 + R() * 2.4, delay: R() * 0.12, vy: 1 + R() * 2 });
+    }
+    for (let i = 0; i < 14; i++) {
+      const a = R() * Math.PI * 2;
+      this.puff('smoke', v.x + Math.cos(a) * 1.5, y + R(), v.z + Math.sin(a) * 1.5, {
+        life: 3 + R() * 3, size: 1.8 + R() * 2, delay: 0.08 + R() * 0.5, vx: Math.cos(a) * 1.5, vy: 2 + R() * 3, vz: Math.sin(a) * 1.5,
+      });
+    }
+    for (let i = 0; i < 14; i++) {
+      const a = R() * Math.PI * 2, s = 6 + R() * 12;
+      const m = new THREE.Mesh(this.chunkGeo, this.debrisMat);
+      m.position.set(v.x, y, v.z);
+      m.scale.set(0.5 + R(), 0.5 + R() * 0.6, 0.5 + R());
+      m.castShadow = true;
+      this.fxGroup.add(m);
+      this.fx.push({ kind: 'debris', mesh: m, t: 0, life: 5 + R() * 2, vx: Math.cos(a) * s, vy: 6 + R() * 10, vz: Math.sin(a) * s, spin: (R() - 0.5) * 20, floor: v.y + 0.1, base: m.scale.clone() });
+    }
+  }
+
+  puff(kind, x, y, z, { life, size, delay = 0, vx = 0, vy = 0, vz = 0 }) {
+    const mat = kind === 'fire'
+      ? new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false })
+      : new THREE.MeshLambertMaterial({ color: 0x2a2826, transparent: true, opacity: 0, depthWrite: false });
+    const m = new THREE.Mesh(this.puffGeo, mat);
+    m.position.set(x, y, z);
+    m.visible = false;
+    m.rotation.set(Math.random() * 6, Math.random() * 6, 0);
+    this.fxGroup.add(m);
+    this.fx.push({ kind, mesh: m, mat, t: -delay, life, size, vx, vy, vz });
+  }
+
+  updateFx(dt) {
+    for (let i = this.wrecks.length - 1; i >= 0; i--) {
+      const v = this.wrecks[i];
+      if (v.hop) {
+        v.hop.vy -= 22 * dt;
+        v.y += v.hop.vy * dt;
+        if (v.y <= v.hop.y0) {
+          v.y = v.hop.y0;
+          v.hop = null;
+        }
+        v.dirty = true;
+      }
+      v.burn -= dt;
+      v.emit -= dt;
+      if (v.emit <= 0 && v.burn > 0) {
+        v.emit = 0.16;
+        const R = Math.random, k = v.burn / 12;
+        const x = v.x + (R() - 0.5) * 2, z = v.z + (R() - 0.5) * 2;
+        if (R() < 0.3 + k * 0.6) this.puff('fire', x, v.y + 1.4, z, { life: 0.35 + R() * 0.3, size: 0.7 + R() * 0.8 * (0.4 + k), vy: 2.5 });
+        this.puff('smoke', x, v.y + 1.8, z, { life: 3 + R() * 2, size: 0.9 + R() * 0.8, vx: (R() - 0.5), vy: 2.5 + R() * 1.5, vz: (R() - 0.5) });
+      }
+      if (v.burn <= 0 && !v.hop) this.wrecks.splice(i, 1);
+    }
+    for (let i = this.fx.length - 1; i >= 0; i--) {
+      const f = this.fx[i];
+      f.t += dt;
+      if (f.t < 0) continue;
+      const m = f.mesh;
+      const k = f.t / f.life;
+      if (k >= 1) {
+        this.fxGroup.remove(m);
+        f.mat?.dispose();
+        this.fx.splice(i, 1);
+        continue;
+      }
+      m.visible = true;
+      if (f.kind === 'debris') {
+        f.vy -= 22 * dt;
+        m.position.x += f.vx * dt;
+        m.position.y += f.vy * dt;
+        m.position.z += f.vz * dt;
+        if (m.position.y < f.floor) {
+          m.position.y = f.floor;
+          f.vy *= -0.3;
+          f.vx *= 0.55;
+          f.vz *= 0.55;
+          f.spin *= 0.5;
+        }
+        m.rotation.x += f.spin * dt;
+        m.rotation.z += f.spin * 0.7 * dt;
+        if (k > 0.85) m.scale.copy(f.base).multiplyScalar((1 - k) / 0.15);
+        continue;
+      }
+      m.position.x += f.vx * dt;
+      m.position.y += f.vy * dt;
+      m.position.z += f.vz * dt;
+      if (f.kind === 'fire') {
+        m.scale.setScalar(f.size * (0.35 + 0.65 * Math.sqrt(k)));
+        // white-hot core cooling through orange to deep red (values >1 feed the bloom)
+        f.mat.color.setRGB(3 * (1 - k * 0.4), 2.2 * (1 - k) ** 1.5 + 0.15, 0.9 * (1 - k) ** 3);
+        f.mat.opacity = 1 - k;
+      } else {
+        m.scale.setScalar(f.size * (0.6 + k * 1.8));
+        f.mat.opacity = 0.6 * Math.min(1, f.t * 5) * (1 - k);
+      }
+    }
   }
 
   nearest(x, z, maxD) {
     let best = null, bd = maxD;
     for (const v of this.nearby(x, z, [])) {
+      if (v.wrecked) continue;
       const d = Math.hypot(v.x - x, v.z - z) - v.hx * 0.6;
       if (d < bd) {
         bd = d;

@@ -129,7 +129,7 @@ export default defineGame({
     })));
 
     // ---------- live tweaks ----------
-    tweaks.add('Dragon / Flight speed ×', { value: 1, min: 0, max: 3, step: 0.05, onChange: (v) => (dragon.speed = v) });
+    tweaks.add('Dragon / Flight speed ×', { value: 100, min: 0, max: 150, step: 0.5, onChange: (v) => (dragon.speed = v) });
     tweaks.add('Dragon / Altitude', { value: 115, min: 40, max: 300, step: 1, onChange: (v) => (dragon.alt = v) });
     tweaks.add('Dragon / Circle radius', { value: 330, min: 120, max: 800, step: 5, onChange: (v) => (dragon.radius = v) });
     tweaks.add('Dragon / Size ×', { value: 1, min: 0.3, max: 3, step: 0.05, onChange: (v) => (dragon.scale = v) });
