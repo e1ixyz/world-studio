@@ -7,3 +7,4 @@ apps/desktop/out
 apps/desktop/root.json
 test-results
 playwright-report
+.tanstack
