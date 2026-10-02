@@ -106,6 +106,13 @@ export class ReloadCoordinator {
     }, ms);
   }
 
+  // Flush now, even while a job runs (the agent asked to test its change).
+  flushNow(slug: string) {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.flush(slug);
+  }
+
   flush(slug: string | null) {
     if (!this.pending.size) return;
     const files = [...this.pending.keys()];

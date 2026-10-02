@@ -6,6 +6,7 @@ export function useGameBridge(frame: RefObject<HTMLIFrameElement | null>, onMess
   const handler = useRef(onMessage);
   handler.current = onMessage;
   const waiting = useRef(new Map<number, (text: string) => void>());
+  const probes = useRef(new Map<string, (r: { ok: boolean; data?: unknown; error?: string }) => void>());
   const nextId = useRef(0);
 
   useEffect(
@@ -18,6 +19,11 @@ export function useGameBridge(frame: RefObject<HTMLIFrameElement | null>, onMess
           if (m.t === 'context') {
             waiting.current.get(m.id)?.(m.text);
             waiting.current.delete(m.id);
+            return;
+          }
+          if (m.t === 'probeResult') {
+            probes.current.get(m.id)?.(m);
+            probes.current.delete(m.id);
             return;
           }
           handler.current(m);
@@ -46,5 +52,22 @@ export function useGameBridge(frame: RefObject<HTMLIFrameElement | null>, onMess
     [post],
   );
 
-  return { post, requestContext };
+  // Ask the game one of the agent's questions; answers with an error if the game doesn't reply.
+  const probe = useCallback(
+    (id: string, what: 'screenshot' | 'state') =>
+      new Promise<{ ok: boolean; data?: unknown; error?: string }>((resolve) => {
+        const timer = setTimeout(() => {
+          probes.current.delete(id);
+          resolve({ ok: false, error: 'The game did not answer (it may still be loading, or it crashed).' });
+        }, 6000);
+        probes.current.set(id, (r) => {
+          clearTimeout(timer);
+          resolve(r);
+        });
+        post({ t: 'probe', id, what });
+      }),
+    [post],
+  );
+
+  return { post, requestContext, probe };
 }

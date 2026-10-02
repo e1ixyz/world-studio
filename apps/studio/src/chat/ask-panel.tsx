@@ -444,7 +444,48 @@ function BlockView({ block: b, slug }: { block: Block; slug: string }) {
       );
     case 'error':
       return <ErrorCard text={b.text} slug={b.fixable ? slug : undefined} />;
+    case 'permission':
+      return <PermissionCard block={b} slug={slug} />;
   }
+}
+
+// The agent asked for something the harness doesn't allow on its own (an edit outside the game,
+// a shell command). Deny is the default: nothing happens unless the user allows it.
+function PermissionCard({ block: b, slug }: { block: Extract<Block, { k: 'permission' }>; slug: string }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const answer = async (allow: boolean) => {
+    setBusy(true);
+    try {
+      await postJSON(api.chat[':slug'].permission[':id'].$post({ param: { slug, id: b.id }, json: { allow } }));
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+    setBusy(false);
+  };
+  const outcome = { allowed: 'Allowed', denied: 'Declined', expired: 'No answer in time, so it was declined', pending: '' }[b.state];
+  return (
+    <div className={`dc-perm dc-perm-${b.state}`} data-testid="permission-card">
+      <div className="dc-perm-title">
+        <Icon name="warn" />
+        <span>Claude wants to</span>
+      </div>
+      <pre>{b.text}</pre>
+      {b.state === 'pending' ? (
+        <div className="dc-perm-actions">
+          <button type="button" className="ws-btn sm" disabled={busy} onClick={() => answer(false)}>
+            Decline
+          </button>
+          <button type="button" className="ws-btn sm primary" disabled={busy} onClick={() => answer(true)}>
+            Allow once
+          </button>
+        </div>
+      ) : (
+        <p className="dc-perm-outcome">{outcome}</p>
+      )}
+      {err && <p className="dc-perm-outcome">{err}</p>}
+    </div>
+  );
 }
 
 function ErrorCard({ text, slug }: { text: string; slug?: string }) {

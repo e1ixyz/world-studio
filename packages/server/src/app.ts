@@ -6,6 +6,8 @@ import {
   CreateProjectBody,
   DuplicateBody,
   ImageBody,
+  PermissionBody,
+  ProbeResultBody,
   PromptBody,
   RenameBody,
   RestoreBody,
@@ -23,7 +25,7 @@ const Empty = z.object({}).loose();
 const decodeImage = (data: string) => Buffer.from(String(data).replace(/^data:image\/\w+;base64,/, ''), 'base64');
 
 export function createApi(studio: Studio) {
-  const { projects, chats, settings, checkpoints, events } = studio;
+  const { projects, chats, settings, checkpoints, events, live } = studio;
 
   const project = new Hono()
     .post('/rename', body(RenameBody), (c) => {
@@ -48,10 +50,14 @@ export function createApi(studio: Studio) {
           done = r;
         });
         const unsubscribe = chats.subscribe(slug, since, (item) => void stream.writeSSE({ id: String(item.seq ?? 0), data: JSON.stringify(item) }), done);
+        // questions for the game window showing this project (see domain/live.ts)
+        const onProbe = (p: { slug: string; id: string; what: string }) => p.slug === slug && void stream.writeSSE({ event: 'probe', data: JSON.stringify(p) });
+        events.on('probe', onProbe);
         const ping = setInterval(() => void stream.write(': ping\n\n'), 20000);
         stream.onAbort(done);
         await closed;
         clearInterval(ping);
+        events.off('probe', onProbe);
         unsubscribe();
       });
     })
@@ -73,6 +79,11 @@ export function createApi(studio: Studio) {
     .post('/reset', body(Empty), (c) => {
       chats.reset(c.req.param('slug') as string);
       return c.json({ ok: true });
+    })
+    .post('/probe/:id', body(ProbeResultBody), (c) => c.json({ used: live.answer(c.req.param('slug') as string, c.req.param('id'), c.var.body) }))
+    .post('/permission/:id', body(PermissionBody), (c) => {
+      const ok = chats.answerPermission(c.req.param('slug') as string, c.req.param('id'), c.var.body.allow);
+      return ok ? c.json({ ok }) : c.json({ error: 'That question was already answered, or the run is over' }, 409);
     })
     .post('/restore', body(RestoreBody), (c) => {
       chats.restore(c.req.param('slug') as string, c.var.body.id);

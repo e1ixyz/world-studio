@@ -41,7 +41,7 @@ The production build (`bun run build`, `dist/`) is a third target with no harnes
 Run what the change touches, in both.
 
 1. `npx vite build` compiles, and `bun run test` and `bun run typecheck` pass.
-2. Both sides at once: `bun run test:e2e` runs the Playwright suite in `e2e/` against a private web daemon and a private app daemon (`WORLD_STUDIO_ISOLATED=1`), with the fake agent `scripts/fake-claude.mjs` standing in for `claude`. Add a test there for whatever the change touches.
+2. Both sides at once: `bun run test:e2e` runs the Playwright suite in `e2e/` against a private web daemon and a private app daemon (`WORLD_STUDIO_ISOLATED=1`), with the in-process fake agent (`DEVCHAT_RUNNER=fake`) standing in for Claude. Add a test there for whatever the change touches.
 3. Web by hand: run `bun run dev` in the background, read the URL from `.harness/daemon.json`, and drive it with the Playwright MCP tools. A project is `/p/<slug>`: the studio page, with the game in an iframe. `window.__game` and `window.__harness` live in that frame (`document.querySelector('iframe').contentWindow.__game` from the page). See HANDOFF.md, "Run and verify".
 4. App by hand: run `npx electron . --remote-debugging-port=9333` in the background. It attaches to the daemon from step 3 if one is running. Use `scripts/cdp.mjs` from this skill:
    - `node .claude/skills/parity/scripts/cdp.mjs nav /p/meridian-city?build=1`

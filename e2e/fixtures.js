@@ -5,7 +5,6 @@ import { _electron, test as base, expect } from '@playwright/test';
 // Don't wait for "load": it waits on the Google Fonts stylesheet, which can stall.
 export const DOM = { waitUntil: 'domcontentloaded' };
 export const ROOT = path.resolve(import.meta.dirname, '..');
-export const FAKE_CLAUDE = path.join(ROOT, 'scripts/fake-claude.mjs');
 
 // `page` is a browser tab for "web" and the app window for "electron"; `base` is its origin.
 export const test = base.extend({
@@ -14,7 +13,7 @@ export const test = base.extend({
     const app = await _electron.launch({
       args: [ROOT],
       cwd: ROOT,
-      env: { ...process.env, DEVCHAT_CLAUDE: FAKE_CLAUDE, WORLD_STUDIO_ROOT: ROOT, WORLD_STUDIO_ISOLATED: '1' },
+      env: { ...process.env, DEVCHAT_RUNNER: 'fake', WORLD_STUDIO_ROOT: ROOT, WORLD_STUDIO_ISOLATED: '1' },
     });
     await use(app);
     await app.close();

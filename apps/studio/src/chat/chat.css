@@ -167,3 +167,13 @@
 
 /* the game fills the studio page under the panel */
 .dc-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #05080d; }
+
+/* permission questions from the agent */
+.dc-perm { padding: 10px 12px; border: 1px solid var(--ws-select-line); background: var(--ws-select-soft); }
+.dc-perm-title { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--ws-select); }
+.dc-perm-title svg { width: 15px; height: 15px; }
+.dc-perm pre { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--ws-mono); font-size: 12px; color: var(--ws-ink); }
+.dc-perm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.dc-perm-outcome { margin-top: 6px !important; font-size: 12.5px; color: var(--ws-dim); }
+.dc-perm-allowed, .dc-perm-denied, .dc-perm-expired { border-color: var(--ws-line); background: var(--ws-panel-2); }
+.dc-perm-allowed .dc-perm-title, .dc-perm-denied .dc-perm-title, .dc-perm-expired .dc-perm-title { color: var(--ws-dim); }

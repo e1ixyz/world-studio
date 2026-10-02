@@ -10,6 +10,8 @@ export interface StudioEventMap {
   reload: [ReloadScope];
   settings: [Settings];
   job: [{ slug: string; running: boolean }];
+  // a question for the project's open game window (see live.ts)
+  probe: [{ slug: string; id: string; what: string }];
 }
 
 export class StudioEvents extends EventEmitter<StudioEventMap> {}

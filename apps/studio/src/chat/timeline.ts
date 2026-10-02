@@ -13,7 +13,8 @@ export type Block =
   | { k: 'text'; key: string; text: string; progress: boolean }
   | { k: 'note'; key: string; text: string }
   | { k: 'reload'; key: string; text: string }
-  | { k: 'error'; key: string; text: string; fixable: boolean };
+  | { k: 'error'; key: string; text: string; fixable: boolean }
+  | { k: 'permission'; key: string; id: string; text: string; state: 'pending' | 'allowed' | 'denied' | 'expired' };
 
 export const secs = (ms: number) => (ms < 60000 ? `${Math.round(ms / 1000)}s` : `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`);
 
@@ -21,6 +22,7 @@ const keyOf = (item: LogItem) => ('localId' in item ? `local-${item.localId}` : 
 
 export function buildTimeline(items: LogItem[]): Block[] {
   const blocks: Block[] = [];
+  const asks = new Map<string, Extract<Block, { k: 'permission' }>>();
   let turn: { texts: number[]; steps: number | null; start: number } | null = null;
   const startTurn = (ts: number) => ({ texts: [], steps: null, start: ts || Date.now() });
   for (const item of items) {
@@ -65,6 +67,17 @@ export function buildTimeline(items: LogItem[]): Block[] {
       case 'error':
         blocks.push({ k: 'error', key, text: item.text, fixable: 'fixable' in item && item.fixable });
         break;
+      case 'permission': {
+        // the request makes the card; the answer, a later item with the same id, updates it
+        const known = asks.get(item.meta.id);
+        if (known) known.state = item.meta.state;
+        else {
+          const b = { k: 'permission' as const, key, id: item.meta.id, text: item.text, state: item.meta.state };
+          asks.set(item.meta.id, b);
+          blocks.push(b);
+        }
+        break;
+      }
     }
   }
   return blocks;

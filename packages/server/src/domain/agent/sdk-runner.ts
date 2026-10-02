@@ -29,7 +29,8 @@ export class SdkRunner implements AgentRunner {
             tools: req.tools.map((t) =>
               tool(t.name, t.description, t.input, async (args) => {
                 try {
-                  return { content: [{ type: 'text' as const, text: await t.run(args as Record<string, unknown>) }] };
+                  const out = await t.run(args as Record<string, unknown>);
+                  return { content: typeof out === 'string' ? [{ type: 'text' as const, text: out }] : out };
                 } catch (err) {
                   return { content: [{ type: 'text' as const, text: `Failed: ${(err as Error).message}` }], isError: true };
                 }
@@ -57,6 +58,12 @@ export class SdkRunner implements AgentRunner {
             pathToClaudeCodeExecutable: executable,
             abortController: abort,
             mcpServers,
+            canUseTool: req.askPermission
+              ? async (toolName, input, opts) => {
+                  const allow = await req.askPermission?.({ tool: toolName, input, title: opts.title, toolUseID: opts.toolUseID }, opts.signal);
+                  return allow ? { behavior: 'allow', updatedInput: input } : { behavior: 'deny', message: 'The user declined this in World Studio.' };
+                }
+              : undefined,
           },
         });
         for await (const msg of q) {

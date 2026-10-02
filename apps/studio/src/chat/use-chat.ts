@@ -4,7 +4,9 @@ import type { ChatState } from '@ws/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LogItem } from './timeline.ts';
 
-export function useChat(slug: string, onLive: (item: LogItem) => void) {
+export type Probe = { id: string; what: 'screenshot' | 'state' };
+
+export function useChat(slug: string, onLive: (item: LogItem) => void, onProbe: (p: Probe) => void) {
   const [items, setItems] = useState<LogItem[]>([]);
   const [state, setState] = useState<ChatState | null>(null);
   const [offline, setOffline] = useState(false);
@@ -13,6 +15,8 @@ export function useChat(slug: string, onLive: (item: LogItem) => void) {
   const localId = useRef(0);
   const onLiveRef = useRef(onLive);
   onLiveRef.current = onLive;
+  const onProbeRef = useRef(onProbe);
+  onProbeRef.current = onProbe;
 
   useEffect(() => {
     setItems([]);
@@ -33,6 +37,8 @@ export function useChat(slug: string, onLive: (item: LogItem) => void) {
       if (live.current) onLiveRef.current(m);
     };
     es.onerror = () => setOffline(true);
+    // the agent asking about the running game (view_game, game_state)
+    es.addEventListener('probe', (e) => onProbeRef.current(JSON.parse((e as MessageEvent).data)));
     return () => es.close();
   }, [slug]);
 

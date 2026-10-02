@@ -1,7 +1,7 @@
 import type { GameMeta } from '@ws/shared';
 
 // Appended to Claude Code's own system prompt for every in-game run.
-export function systemPrompt(slug: string, meta: GameMeta, engine: boolean, { checkTool = false } = {}) {
+export function systemPrompt(slug: string, meta: GameMeta, engine: boolean, { checkTool = false, liveTools = false } = {}) {
   return `You are live-editing the game "${meta.name || slug}" in World Studio, a harness where every game runs on one shared Three.js engine and the user builds by prompting while the game runs.
 
 - This game's code is in games/${slug}/. ${
@@ -20,7 +20,11 @@ ${
       ? '- After editing, call the check_game tool: a fast type and syntax check of this game against the engine contract (engine/types.d.ts). Errors that existed before this prompt are left out, so fix everything it reports. For larger changes also run `npx vite build`.'
       : '- For larger changes run `npx vite build` to confirm it compiles.'
   }
-- End with one or two plain sentences: what changed and how to see it in the game.`;
+${
+    liveTools
+      ? '- You can see the running game in the user\'s window: view_game returns a screenshot of their view, game_state its state (position, selection, frame rate, errors), and reload_game applies your changes now so you can check them with the other two before you finish.\n'
+      : ''
+  }- End with one or two plain sentences: what changed and how to see it in the game.`;
 }
 
 export function firstBuildPrompt(slug: string, templateName: string, description: string) {

@@ -15,9 +15,13 @@ const slug = location.pathname.match(/^\/play\/([\w-]+)/)?.[1] || params.get('ga
 
 type Game = {
   state?: string;
+  app?: { capture(o: { width?: number; quality?: number }): Promise<string>; renderer: { info: { render: Record<string, number>; memory: Record<string, number> } } };
+  game?: { snapshot?(ctx: unknown): unknown };
+  ctx?: unknown;
+  select?: { selected?: unknown; describe(): string };
   player?: { focus: { x: number; z: number }; driving?: unknown; flying?: boolean; altitude: number };
   camera: { getWorldDirection(v: unknown): { x: number; z: number }; position: { constructor: new () => unknown } };
-  build: { pos: { x: number; y: number; z: number }; pitch: number };
+  build: { pos: { x: number; y: number; z: number }; pitch: number; yaw?: number };
   env: { clock: string };
 };
 type Harness = { getSelection?: () => string; screenshot?: () => void };
@@ -27,6 +31,34 @@ const post = (msg: GameMessageBody) => send(window.parent, msg, ORIGIN);
 
 if (embedded) {
   let panelOpen = false;
+
+  // Errors since this page loaded, for the agent's game_state.
+  const errors: string[] = [];
+  const noteError = (text: string) => {
+    errors.push(text.slice(0, 2000));
+    if (errors.length > 20) errors.shift();
+  };
+  const consoleError = console.error.bind(console);
+  console.error = (...args: unknown[]) => {
+    noteError(args.map((a) => (a instanceof Error ? a.stack || a.message : String(a))).join(' '));
+    consoleError(...args);
+  };
+  // Frames per second over the last second.
+  let fps = 0;
+  {
+    let frames = 0;
+    let since = performance.now();
+    const count = (t: number) => {
+      frames++;
+      if (t - since >= 1000) {
+        fps = Math.round((frames * 1000) / (t - since));
+        frames = 0;
+        since = t;
+      }
+      requestAnimationFrame(count);
+    };
+    requestAnimationFrame(count);
+  }
 
   w.devchat = {
     open: (focus = true) => post({ t: 'open', focus }),
@@ -56,8 +88,44 @@ if (embedded) {
       case 'exitPointerLock':
         document.exitPointerLock?.();
         break;
+      case 'probe':
+        answerProbe(m.id, m.what).then(
+          (data) => post({ t: 'probeResult', id: m.id, ok: true, data }),
+          (err) => post({ t: 'probeResult', id: m.id, ok: false, error: String(err?.message || err) }),
+        );
+        break;
     }
   });
+
+  async function answerProbe(id: string, what: 'screenshot' | 'state') {
+    const g = w.__game;
+    if (what === 'screenshot') {
+      if (!g?.app) throw new Error(errors.length ? `The game is not running. Last error:\n${errors.at(-1)}` : 'The game has not started yet');
+      const data = await g.app.capture({ width: 1024, quality: 0.8 });
+      const canvas = document.querySelector('canvas');
+      const ratio = canvas ? canvas.height / canvas.width : 9 / 16;
+      return { data, width: 1024, height: Math.round(1024 * ratio) };
+    }
+    const info = g?.app?.renderer.info;
+    let snapshot: unknown;
+    try {
+      snapshot = g?.game?.snapshot?.(g.ctx);
+    } catch (err) {
+      snapshot = `snapshot() threw: ${(err as Error).message}`;
+    }
+    const json = JSON.stringify(snapshot ?? null);
+    return {
+      id,
+      running: !!g?.app,
+      mode: g?.state ?? null,
+      context: gameContext(),
+      selection: w.__harness?.getSelection?.() || null,
+      fps,
+      renderer: info ? { calls: info.render.calls, triangles: info.render.triangles, geometries: info.memory.geometries, textures: info.memory.textures } : null,
+      errors,
+      snapshot: json.length > 4000 ? `${json.slice(0, 4000)}… (truncated)` : snapshot,
+    };
+  }
 
   // ---------- state the studio shows (mode, selection) ----------
   let last = '';
@@ -141,17 +209,27 @@ if (embedded) {
     (e) => {
       const target = e.target as HTMLScriptElement | null;
       if (target && (target as unknown) !== window && target.tagName === 'SCRIPT') {
-        post({ t: 'error', text: `Failed to load ${target.src}. A module probably has a syntax error; run npx vite build to see it.` });
+        const text = `Failed to load ${target.src}. A module probably has a syntax error; run npx vite build to see it.`;
+        noteError(text);
+        post({ t: 'error', text });
       } else if (e.error || e.message) {
-        post({ t: 'error', text: `${e.error?.stack || e.message}${e.filename ? `\n  at ${e.filename}:${e.lineno}:${e.colno}` : ''}` });
+        const text = `${e.error?.stack || e.message}${e.filename ? `\n  at ${e.filename}:${e.lineno}:${e.colno}` : ''}`;
+        noteError(text);
+        post({ t: 'error', text });
       }
     },
     true,
   );
-  window.addEventListener('unhandledrejection', (e) => post({ t: 'error', text: e.reason?.stack || String(e.reason) }));
-  import.meta.hot?.on('vite:error', ({ err }: { err: { message: string; id?: string; frame?: string } }) =>
-    post({ t: 'error', text: `${err.message}${err.id ? `\n  in ${err.id}` : ''}${err.frame ? `\n${err.frame}` : ''}` }),
-  );
+  window.addEventListener('unhandledrejection', (e) => {
+    const text = e.reason?.stack || String(e.reason);
+    noteError(text);
+    post({ t: 'error', text });
+  });
+  import.meta.hot?.on('vite:error', ({ err }: { err: { message: string; id?: string; frame?: string } }) => {
+    const text = `${err.message}${err.id ? `\n  in ${err.id}` : ''}${err.frame ? `\n${err.frame}` : ''}`;
+    noteError(text);
+    post({ t: 'error', text });
+  });
 }
 
 // "[Game context: …]": where the player (or the build camera) is and where it faces.

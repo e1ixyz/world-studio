@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import type { AgentRunner } from './domain/agent/runner.ts';
 import { CliRunner } from './domain/agent/cli-runner.ts';
+import { FakeRunner } from './domain/agent/fake-runner.ts';
 import { SdkRunner } from './domain/agent/sdk-runner.ts';
 import { checkGame } from './domain/check-game.ts';
 import { ChatService } from './domain/chat.ts';
@@ -12,6 +13,7 @@ import { GitCheckpointStore, gitAvailable } from './domain/checkpoints/git.ts';
 import type { CheckpointStore } from './domain/checkpoints/store.ts';
 import { StudioEvents } from './domain/events.ts';
 import { relPath, studioPaths } from './domain/paths.ts';
+import { LiveGames } from './domain/live.ts';
 import { Projects } from './domain/projects.ts';
 import { LATE_EVENT_MS, type ModuleInvalidator, ReloadCoordinator } from './domain/reloads.ts';
 import { SettingsStore } from './domain/settings.ts';
@@ -24,10 +26,12 @@ export interface StudioOptions {
 
 export type Studio = ReturnType<typeof createStudio>;
 
-// DEVCHAT_RUNNER=sdk|cli picks the runner. Default: the Agent SDK, unless DEVCHAT_CLAUDE points at
-// another binary (tests use scripts/fake-claude.mjs, which only speaks the CLI's stream-json).
+// DEVCHAT_RUNNER=sdk|cli|fake picks the runner. Default: the Agent SDK, unless DEVCHAT_CLAUDE points
+// at another binary (scripts/fake-claude.mjs only speaks the CLI's stream-json). `fake` is the
+// in-process test agent (domain/agent/fake-runner.ts).
 export function defaultRunner(env = process.env): AgentRunner {
   const choice = env.DEVCHAT_RUNNER || (env.DEVCHAT_CLAUDE ? 'cli' : 'sdk');
+  if (choice === 'fake') return new FakeRunner();
   return choice === 'cli' ? new CliRunner() : new SdkRunner();
 }
 
@@ -38,6 +42,7 @@ export function createStudio({ root, runner = defaultRunner(), checkpoints }: St
   // Git history when git is installed; folder copies otherwise.
   const store: CheckpointStore = checkpoints ?? (gitAvailable() ? new GitCheckpointStore(paths) : new FsCheckpointStore(paths));
   let invalidator: ModuleInvalidator = { invalidateFiles() {}, invalidateAll() {} };
+  const live = new LiveGames(events);
 
   // biome-ignore lint/style/useConst: assigned below, used by the closures before that
   let chats: ChatService;
@@ -70,6 +75,8 @@ export function createStudio({ root, runner = defaultRunner(), checkpoints }: St
     settings,
     events,
     checkGame: (slug, baseline) => checkGame(paths, slug, baseline),
+    live,
+    reloadNow: (slug) => reloads.flushNow(slug),
     onJobEnd: (slug) => reloads.jobEnded(slug),
     onRestore: (slug, engine) => {
       reloads.suppress(2500);
@@ -86,6 +93,7 @@ export function createStudio({ root, runner = defaultRunner(), checkpoints }: St
     chats,
     checkpoints: store,
     reloads,
+    live,
     setInvalidator(i: ModuleInvalidator) {
       invalidator = i;
     },

@@ -14,6 +14,13 @@ export const ChatItem = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('status'), ...itemBase, meta: z.unknown().optional() }),
   z.object({ kind: z.literal('error'), ...itemBase, meta: z.unknown().optional() }),
   z.object({ kind: z.literal('reload'), ...itemBase, meta: z.object({ files: z.array(z.string()) }).optional() }),
+  // The agent asked to do something the harness doesn't allow on its own. The first item is the
+  // request (state 'pending'); a later item with the same id records the answer.
+  z.object({
+    kind: z.literal('permission'),
+    ...itemBase,
+    meta: z.object({ id: z.string(), tool: z.string().optional(), state: z.enum(['pending', 'allowed', 'denied', 'expired']) }),
+  }),
   z.object({
     kind: z.literal('done'),
     ...itemBase,
@@ -103,6 +110,8 @@ export const PromptBody = z.object({
   engine: z.boolean().optional(),
 });
 export const RestoreBody = z.object({ id: z.string() });
+export const PermissionBody = z.object({ allow: z.boolean() });
+export const ProbeResultBody = z.object({ ok: z.boolean(), data: z.unknown().optional(), error: z.string().optional() });
 export const SettingsBody = z.object({ alwaysEngine: z.boolean().optional() });
 export const ImageBody = z.object({ slug: Slug, data: z.string() });
 export const TweaksBody = z.object({ slug: Slug, values: z.record(z.string(), z.unknown()).default({}) });

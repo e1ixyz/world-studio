@@ -107,7 +107,7 @@ One Node process per checkout owns the harness: chats, agent jobs, checkpoints a
 - `test/unit/` (Vitest): rng sequences (Meridian's seed is pinned), collision, GeoBuilder, Tweaks, Selection (including the exact `describe()` text), and the shared zod schemas against the real `.harness/` and `games/` data.
 - `e2e/` (Playwright, `playwright.config.js`): one suite, two projects.
   - `web` runs a private daemon on port 5180. `electron` launches the app from source with `WORLD_STUDIO_ISOLATED=1`.
-  - Both use `scripts/fake-claude.mjs` as `DEVCHAT_CLAUDE`. Markers in a prompt change what it does: `[slow]`, `[deny]`, `[fail]`, `[noedit]`.
+  - Both run the in-process fake agent (`DEVCHAT_RUNNER=fake`, `domain/agent/fake-runner.ts`). Markers in a prompt change what it does: `[slow]`, `[deny]`, `[fail]`, `[noedit]`, `[view]`, `[ask]`, `[reload]`.
   - Tests create throwaway projects from Blank and delete them (they land in `.harness/trash/`).
   - Thumbnail posts are stubbed, so the real games' `thumb.jpg` files stay as they are.
   - The fixtures call the harness API from Node, not from inside the page: a prompt can reload the page before an in-page fetch resolves.
@@ -117,9 +117,9 @@ One Node process per checkout owns the harness: chats, agent jobs, checkpoints a
 
 The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Every phase keeps the three games and both surfaces working.
 
-- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`), P4 (git checkpoints with diffs), P5 (Agent SDK runner, engine types, `check_game`, `env.setSky()`), P6a (React studio with the landing page), P6b (project shell: game frame, bridge, React Ask panel).
+- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`), P4 (git checkpoints with diffs), P5 (Agent SDK runner, engine types, `check_game`, `env.setSky()`), P6a (React studio with the landing page), P6b (project shell: game frame, bridge, React Ask panel), P7 part 1 (live-game tools and permission cards).
 - Next:
-  - P7: build panels in React, live-game MCP tools and permission prompts.
+  - P7 part 2: move build mode's top bar, Properties and tweaks panels into React over the bridge (`engine/build/buildmode.js` keeps the camera, picking and the selection tag).
   - P8: PGlite + Drizzle database and the play-only export.
 - Open follow-up: `games/meridian-city/game.js` still sets the Sky shader's uniforms directly for its Sky tweaks. That code is in uncommitted work on the game, so it was left alone; switch it to `ctx.env.setSky()`.
 - `engine/` stays at the repo root on purpose: games import it by relative path, and the agent's edit rules and old checkpoints use that path.
@@ -134,7 +134,7 @@ packages/    server (studio daemon, API, domain), shared (zod schemas), bridge (
 apps/studio/ React studio UI: landing page, project shell, Ask panel
 apps/desktop/ Electron shell for the macOS app
 test/unit/   Vitest unit tests;  e2e/  Playwright suite (web + Electron)
-scripts/     fake-claude.mjs (stand-in agent for tests)
+scripts/     fake-claude.mjs (stand-in claude CLI for the CLI runner test)
 .harness/    runtime data: chat logs, checkpoints, screenshots, trash, daemon.json (gitignored)
 index.html   studio shell, loads apps/studio/src/main.tsx
 play.html    game page shell, loads engine/runtime.js
@@ -273,6 +273,17 @@ claude -p <prompt> --output-format stream-json --verbose --permission-mode defau
   - A baseline taken when the prompt starts filters out errors the game already had. Each game has 7–10 inference errors; diagnostics are matched by file, code and message, not by line.
   - The system prompt tells the agent to call it after editing, and the chat shows it as "Check the game for errors".
   - Per-game tsconfigs are written to `.harness/tsconfig/<slug>.json`.
+- Live-game tools (SDK runs; `domain/live.ts`, `ChatService.liveTools`):
+  - `view_game` returns an image block: a 1024 px JPEG of the game view.
+  - `game_state` returns JSON: mode, `[Game context]`, selection, fps, draw calls and triangles, errors since load, and the game's `snapshot()`.
+  - `reload_game` flushes this game's pending changes mid-run, waits 1.5 s, then returns `game_state`.
+  - The daemon can't see the game. `LiveGames.ask()` emits a `probe` event, which the chat SSE stream sends to every shell open on the project. The shell asks the game over the bridge (`probe` / `probeResult`) and posts the answer to `POST /chat/<slug>/probe/<id>`. The first answer wins; with no window open, the call fails after 5 s (8 s for a screenshot) with a message telling the agent to ask the user to open the project.
+  - Verified with a real Haiku run on 2026-10-02: it called `view_game` and described the ground correctly, in 6.2 s for $0.085.
+- Permission cards (SDK runs): a tool the harness doesn't allow on its own reaches `canUseTool`, for example an edit outside the game when engine edits are off, or a shell command outside the allowlist. `ChatService.permissionAsker` then posts a `permission` chat item, using the SDK's own `title` when it has one, and the panel opens on a card with Decline and Allow once.
+  - `POST /chat/<slug>/permission/<id>` with `{ allow }` answers it, and a second `permission` item with the same id records the answer.
+  - No answer within 5 minutes, or Stop, counts as a decline. A declined path is left out of the end-of-run "Blocked edits" note.
+  - Deny rules from the user's settings still deny without asking.
+- Tests use `FakeRunner` (`DEVCHAT_RUNNER=fake`, in-process). It scripts a run from markers in the prompt: `[slow]`, `[noedit]`, `[deny]`, `[fail]`, `[view]`, `[ask]`, `[reload]`. `scripts/fake-claude.mjs` now backs only `CliRunner`'s own test (`cli-runner.test.ts`).
 - One real SDK run was verified on 2026-10-02 (Haiku, throwaway project): Read, Edit, `check_game`, done in 13.6 s for $0.096, then the scoped reload and a checkpoint diff of one file, +1.
 - Path-scoped permissions were checked with a CLI spike: edits outside the allowed folder are denied. Denied paths show up in the chat as a status line, "Blocked outside this game: ..." (the `result` callback in `ChatService.prompt()`).
 - Stop sends SIGTERM. The chat then says "Stopped. Open Checkpoints to undo any partial edits."

@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 // Two targets, one suite: "web" drives a dev server in Chromium, "electron" drives the desktop
-// shell from source. Both use the fake agent (scripts/fake-claude.mjs), so no prompt costs money.
+// shell from source. Both use the in-process fake agent (DEVCHAT_RUNNER=fake), so no prompt costs money.
 export const WEB_PORT = 5180;
 
 export default defineConfig({
@@ -20,6 +20,6 @@ export default defineConfig({
     command: `node packages/server/src/cli.ts --port ${WEB_PORT} --strict-port --no-lock`,
     url: `http://localhost:${WEB_PORT}/`,
     reuseExistingServer: false,
-    env: { DEVCHAT_CLAUDE: 'scripts/fake-claude.mjs' },
+    env: { DEVCHAT_RUNNER: 'fake' },
   },
 });

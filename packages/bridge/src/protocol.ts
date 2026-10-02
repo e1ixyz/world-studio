@@ -22,6 +22,7 @@ export const GameMessage = z.discriminatedUnion('t', [
   z.object({ ...envelope, t: z.literal('error'), text: z.string() }),
   z.object({ ...envelope, t: z.literal('quickPrompt'), text: z.string() }),
   z.object({ ...envelope, t: z.literal('context'), id: z.number(), text: z.string() }),
+  z.object({ ...envelope, t: z.literal('probeResult'), id: z.string(), ok: z.boolean(), data: z.unknown().optional(), error: z.string().optional() }),
 ]);
 export type GameMessage = z.infer<typeof GameMessage>;
 
@@ -33,6 +34,8 @@ export const StudioMessage = z.discriminatedUnion('t', [
   z.object({ ...envelope, t: z.literal('requestContext'), id: z.number() }),
   z.object({ ...envelope, t: z.literal('screenshot') }),
   z.object({ ...envelope, t: z.literal('exitPointerLock') }),
+  // a question from the agent: 'screenshot' (the view as a JPEG data URL) or 'state' (JSON)
+  z.object({ ...envelope, t: z.literal('probe'), id: z.string(), what: z.enum(['screenshot', 'state']) }),
 ]);
 export type StudioMessage = z.infer<typeof StudioMessage>;
 

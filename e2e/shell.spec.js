@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DOM, ROOT, expect, gameFrame, markWindow, openGame, test, waitForReload, withTempProject } from './fixtures.js';
+import { DOM, ROOT, api, expect, gameFrame, markWindow, openGame, test, waitForReload, withTempProject } from './fixtures.js';
 
 // The project shell: the game in a frame, the Ask panel beside it, the bridge between them.
 
@@ -92,3 +92,47 @@ test('Enter in play mode opens the quick prompt bar inside the game, and it send
     expect(log().find((i) => i.kind === 'user').text).toBe('add a lamp post here [noedit]');
   });
 });
+
+const chatLog = (slug) => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(ROOT, '.harness/projects', slug, 'chat.json'), 'utf8')).log;
+  } catch {
+    return [];
+  }
+};
+
+test('the agent can see the game through the open window', async ({ page, base }) => {
+  await withTempProject(page, base, async (slug) => {
+    await openGame(page, base, slug, '?build=1');
+    await page.locator('textarea[aria-label=Prompt]').fill('look at it [view] [noedit]');
+    await page.locator('.dc-send').click();
+    await expect.poll(() => chatLog(slug).some((i) => i.kind === 'done'), { timeout: 30_000 }).toBe(true);
+    const texts = chatLog(slug).filter((i) => i.kind === 'text').map((i) => i.text);
+    expect(texts.find((t) => t.startsWith('view_game'))).toMatch(/got a image\/jpeg image, \d{4,} base64 chars\. Screenshot of the game view, 1024x\d+/);
+    const state = texts.find((t) => t.startsWith('game_state'));
+    expect(state).toContain('"running": true');
+    expect(state).toContain('"mode": "build"');
+    await expect(page.locator('.dc-steps-count').first()).toContainText('steps');
+  });
+});
+
+for (const allow of [true, false]) {
+  test(`a permission card asks before the agent leaves the game folder (${allow ? 'allow' : 'decline'})`, async ({ page, base }) => {
+    await withTempProject(page, base, async (slug) => {
+      const game = await openGame(page, base, slug);
+      await markWindow(game);
+      await page.evaluate(() => sessionStorage.clear());
+      const { status } = await api(base, `/chat/${slug}/prompt`, { text: 'edit the engine [ask]' });
+      expect(status).toBe(200);
+      const card = page.getByTestId('permission-card');
+      await expect(card).toContainText('Edit engine/core/fake-ask.js');
+      await expect(page.locator('.dc-root.open')).toHaveCount(1); // the question opens the panel
+      await card.getByRole('button', { name: allow ? 'Allow once' : 'Decline' }).click();
+      await expect(card).toContainText(allow ? 'Allowed' : 'Declined');
+      await expect.poll(() => chatLog(slug).some((i) => i.kind === 'done')).toBe(true);
+      const edited = fs.readFileSync(path.join(ROOT, 'games', slug, 'game.js'), 'utf8').includes('fake-agent');
+      expect(edited).toBe(allow);
+      if (allow) await waitForReload(game);
+    });
+  });
+}

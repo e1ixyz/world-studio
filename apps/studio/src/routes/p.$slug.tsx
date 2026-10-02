@@ -42,9 +42,20 @@ function ProjectShell() {
   const flash = useCallback((f: { text: string; error?: boolean } | null) => {
     if (f) setFeed({ ...f, text: f.text.length > 90 ? `${f.text.slice(0, 88)}…` : f.text, until: Date.now() + (f.error ? 8000 : 5000) });
   }, []);
-  const chat = useChat(slug, (item: LogItem) => flash(feedFor(item)));
+  const chat = useChat(
+    slug,
+    (item: LogItem) => {
+      flash(feedFor(item));
+      // the agent is waiting on the user: show the question
+      if (item.kind === 'permission' && item.meta.state === 'pending') show(false);
+    },
+    async ({ id, what }) => {
+      const r = await probe(id, what);
+      api.chat[':slug'].probe[':id'].$post({ param: { slug, id }, json: r });
+    },
+  );
 
-  const { post, requestContext } = useGameBridge(frame, (m) => {
+  const { post, requestContext, probe } = useGameBridge(frame, (m) => {
     switch (m.t) {
       case 'state':
         setGame({ mode: m.mode, selection: m.selection, canShoot: m.canShoot });

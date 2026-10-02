@@ -38,6 +38,17 @@ describe('buildTimeline', () => {
   });
 });
 
+describe('permission cards', () => {
+  it('shows one card per question and updates it with the answer', () => {
+    const blocks = buildTimeline([
+      item('user', 'x'),
+      item('permission', 'Edit engine/core/app.js', { id: 'a1', tool: 'Edit', state: 'pending' }),
+      item('permission', '', { id: 'a1', tool: 'Edit', state: 'denied' }),
+    ]);
+    expect(blocks.filter((b) => b.k === 'permission')).toEqual([expect.objectContaining({ id: 'a1', text: 'Edit engine/core/app.js', state: 'denied' })]);
+  });
+});
+
 describe('helpers', () => {
   it('feedFor', () => {
     expect(feedFor(item('user', 'hello\nmore'))).toEqual({ text: 'Sent: hello' });

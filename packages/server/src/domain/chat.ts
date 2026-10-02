@@ -2,10 +2,11 @@
 // project at a time. Every prompt is checkpointed first, and edits are limited to the game's
 // folder (plus engine/ when allowed).
 import type { ChatItem, ChatItemKind, ChatState } from '@ws/shared';
-import { type AgentRunner, type RunHandle, STUDIO_TOOL_PREFIX, type StudioTool } from './agent/runner.ts';
+import { type AgentRunner, type AskPermission, type RunHandle, STUDIO_TOOL_PREFIX, type StudioTool } from './agent/runner.ts';
 import { type CheckResult, diagKey, formatCheck } from './check-game.ts';
 import type { ChatRepository } from './chat-store.ts';
 import type { CheckpointStore } from './checkpoints/store.ts';
+import type { LiveGames } from './live.ts';
 import type { StudioEvents } from './events.ts';
 import { gameDir, relPath, type StudioPaths } from './paths.ts';
 import type { Projects } from './projects.ts';
@@ -13,6 +14,7 @@ import { systemPrompt } from './prompts.ts';
 import type { SettingsStore } from './settings.ts';
 
 export const MAX_LOG = 400;
+export const PERMISSION_TIMEOUT_MS = 5 * 60_000;
 export const BASE_TOOLS = ['Read', 'Glob', 'Grep', 'Bash(npx vite build:*)'];
 
 export type ChatEvent = ChatItem | ChatState;
@@ -23,6 +25,10 @@ interface Job {
   startedAt: number;
   engine: boolean;
   checkpoint: string;
+  // open permission questions, by id
+  asks: Map<string, (allow: boolean, state?: 'expired') => void>;
+  // what the user explicitly declined (file paths or tool names), so the end-of-run "blocked" note skips it
+  declined: Set<string>;
 }
 
 interface Chat {
@@ -58,6 +64,12 @@ export function describeTool(p: StudioPaths, name: string, input: Record<string,
       return 'Load tools';
     case `${STUDIO_TOOL_PREFIX}check_game`:
       return 'Check the game for errors';
+    case `${STUDIO_TOOL_PREFIX}view_game`:
+      return 'Look at the game';
+    case `${STUDIO_TOOL_PREFIX}game_state`:
+      return 'Read the game state';
+    case `${STUDIO_TOOL_PREFIX}reload_game`:
+      return 'Reload the game and check it';
     default:
       return name;
   }
@@ -73,6 +85,10 @@ export interface ChatDeps {
   events: StudioEvents;
   // Fast type/syntax check of a game, offered to the agent as check_game when the runner hosts tools.
   checkGame?(slug: string, baseline?: Set<string>): Promise<CheckResult>;
+  // Questions for the open game window (view_game, game_state, reload_game).
+  live?: LiveGames;
+  // Apply this game's pending file changes now, even while a job runs (reload_game).
+  reloadNow?(slug: string): void;
   // Told when a job ends, so pending reloads can flush.
   onJobEnd(slug: string): void;
   // Restores wrote files the watcher will report; reloads are sent by the chat itself.
@@ -163,7 +179,7 @@ export class ChatService {
     if (engine) tools.push(...allow(paths.engine));
     const studioTools = this.studioTools(slug);
     tools.push(...studioTools.map((t) => STUDIO_TOOL_PREFIX + t.name));
-    const job: Job = { handle: { stop() {} }, startedAt: Date.now(), engine, checkpoint };
+    const job: Job = { handle: { stop() {} }, startedAt: Date.now(), engine, checkpoint, asks: new Map(), declined: new Set() };
     c.job = job;
     job.handle = this.d.runner.start(
       {
@@ -171,7 +187,11 @@ export class ChatService {
         cwd: paths.root,
         allowedTools: tools,
         tools: studioTools,
-        appendSystemPrompt: systemPrompt(slug, meta, engine, { checkTool: studioTools.some((t) => t.name === 'check_game') }),
+        askPermission: this.permissionAsker(slug, job),
+        appendSystemPrompt: systemPrompt(slug, meta, engine, {
+          checkTool: studioTools.some((t) => t.name === 'check_game'),
+          liveTools: studioTools.some((t) => t.name === 'view_game'),
+        }),
         resume: c.sessionId,
         model: process.env.DEVCHAT_MODEL,
         // WORLD_STUDIO_AGENT lets user-level hooks (e.g. a handoff Stop hook) skip these short in-game runs
@@ -184,6 +204,8 @@ export class ChatService {
         text: (text) => this.push(slug, 'text', text),
         tool: (name, input) => this.push(slug, 'tool', describeTool(paths, name, input), { name }),
         result: (r) => {
+          const denials = r.denials.filter((d) => !job.declined.has(d.tool_input?.file_path || d.tool_name));
+          r = { ...r, denials };
           const files = [...new Set(r.denials.filter((d) => d.tool_input?.file_path).map((d) => relPath(paths, d.tool_input?.file_path)))];
           const tools = [...new Set(r.denials.filter((d) => !d.tool_input?.file_path).map((d) => d.tool_name))];
           if (files.length) {
@@ -200,6 +222,7 @@ export class ChatService {
           this.push(slug, 'done', '', { ms: r.ms, cost: r.cost });
         },
         exit: ({ stopped, error }) => {
+          for (const answer of job.asks.values()) answer(false);
           c.job = null;
           if (stopped) this.push(slug, 'status', 'Stopped. Open Checkpoints to undo any partial edits.');
           else if (error) this.push(slug, 'error', error);
@@ -219,9 +242,83 @@ export class ChatService {
     this.broadcastState(c);
   }
 
+  // Ask the user in the chat. The card waits for an answer, the run stopping, or five minutes.
+  private permissionAsker(slug: string, job: Job): AskPermission {
+    return ({ tool, input, title }, signal) =>
+      new Promise<boolean>((resolve) => {
+        const id = `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        const target = typeof input.file_path === 'string' ? input.file_path : undefined;
+        const text = title || (target ? `${tool} ${relPath(this.d.paths, target)}` : `${describeTool(this.d.paths, tool, input)}`);
+        this.push(slug, 'permission', text, { id, tool, state: 'pending' });
+        const finish = (allow: boolean, state?: 'expired') => {
+          if (!job.asks.has(id)) return;
+          job.asks.delete(id);
+          clearTimeout(timer);
+          if (!allow) job.declined.add(target || tool);
+          this.push(slug, 'permission', '', { id, tool, state: state ?? (allow ? 'allowed' : 'denied') });
+          resolve(allow);
+        };
+        const timer = setTimeout(() => finish(false, 'expired'), PERMISSION_TIMEOUT_MS);
+        job.asks.set(id, finish);
+        signal.addEventListener('abort', () => finish(false), { once: true });
+      });
+  }
+
+  // The user's answer to a permission card. False if it was already answered or the run is over.
+  answerPermission(slug: string, id: string, allow: boolean) {
+    const answer = this.chats.get(slug)?.job?.asks.get(id);
+    if (!answer) return false;
+    answer(allow);
+    return true;
+  }
+
   private studioTools(slug: string): StudioTool[] {
+    if (!this.d.runner.hostsTools) return [];
+    return [...this.checkTools(slug), ...this.liveTools(slug)];
+  }
+
+  // view_game, game_state, reload_game: the agent looks at the running game through the studio window.
+  private liveTools(slug: string): StudioTool[] {
+    const live = this.d.live;
+    if (!live) return [];
+    const state = async () => JSON.stringify(await live.ask(slug, 'state'), null, 1);
+    return [
+      {
+        name: 'view_game',
+        description: 'See what the user sees in the game right now: a screenshot of the game view (the studio panels are not in it). Use it to check how a change looks.',
+        input: {},
+        run: async () => {
+          const shot = (await live.ask(slug, 'screenshot', 8000)) as { data: string; width: number; height: number };
+          const [, mimeType = 'image/jpeg', data = ''] = shot.data.match(/^data:([^;]+);base64,(.*)$/) || [];
+          return [
+            { type: 'image', data, mimeType },
+            { type: 'text', text: `Screenshot of the game view, ${shot.width}x${shot.height}.` },
+          ];
+        },
+      },
+      {
+        name: 'game_state',
+        description:
+          "The running game's state as JSON: mode, the player or build camera position, the build-mode selection, frame rate and renderer stats (draw calls, triangles), errors since the game loaded, and the game's own snapshot().",
+        input: {},
+        run: state,
+      },
+      {
+        name: 'reload_game',
+        description: "Apply this game's file changes in the user's window now (normally they apply when you finish), wait for it to start, and return its state and any errors. Use it to test a change before you finish.",
+        input: {},
+        run: async () => {
+          this.d.reloadNow?.(slug);
+          await new Promise((r) => setTimeout(r, 1500));
+          return state();
+        },
+      },
+    ];
+  }
+
+  private checkTools(slug: string): StudioTool[] {
     const check = this.d.checkGame;
-    if (!this.d.runner.hostsTools || !check) return [];
+    if (!check) return [];
     // Errors the game already has, taken before the agent edits anything.
     const baseline = check(slug).then(
       (r) => new Set(r.errors.map(diagKey)),
