@@ -9,7 +9,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { APP_ID, claimLock, findDaemon, releaseLock, writeLock } from './lock.ts';
-import { createStudio } from './studio.ts';
+import { openStudio, type Studio } from './studio.ts';
 import { studioPlugin } from './vite/plugin.ts';
 
 export const DAEMON_VERSION = 1;
@@ -57,6 +57,7 @@ export async function startDaemon({ root, port = 5173, strictPort = false, lock 
 
   const startedAt = Date.now();
   let vite: import('vite').ViteDevServer | null = null;
+  let studio: Studio | null = null;
   const httpServer = http.createServer((req, res) => {
     // Only this machine, and only by a loopback name: blocks DNS rebinding, since the chat can edit files.
     const host = (req.headers.host || '').replace(/:\d+$/, '');
@@ -88,7 +89,7 @@ export async function startDaemon({ root, port = 5173, strictPort = false, lock 
     }
     // The checkout's own Vite, so the daemon always matches the vite.config.js next to it.
     const { createServer } = (await import(pathToFileURL(path.join(root, 'node_modules/vite/dist/node/index.js')).href)) as typeof import('vite');
-    const studio = createStudio({ root });
+    studio = await openStudio({ root, database: lock ? 'file' : 'memory' });
     vite = await createServer({
       root,
       configFile: path.join(root, 'vite.config.js'),
@@ -110,8 +111,10 @@ export async function startDaemon({ root, port = 5173, strictPort = false, lock 
   const close = () =>
     (closing ??= (async () => {
       if (lock) releaseLock(root);
-      // vite.close() runs the plugins' closeBundle hooks, which stop running agent jobs
+      // vite.close() runs the plugins' closeBundle hooks, which stop running agent jobs; then the
+      // studio flushes its writes and closes the database
       await Promise.race([vite?.close(), new Promise((r) => setTimeout(r, 3000))]);
+      await Promise.race([studio?.close(), new Promise((r) => setTimeout(r, 3000))]);
       httpServer.closeAllConnections();
       await new Promise((r) => httpServer.close(() => r(null)));
     })());

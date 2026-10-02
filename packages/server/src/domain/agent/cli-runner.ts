@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import type { AgentRunner, RunEvents, RunRequest } from './runner.ts';
 
 export class CliRunner implements AgentRunner {
+  readonly name = 'cli';
   readonly hostsTools = false;
   private bin: string;
   constructor(bin = process.env.DEVCHAT_CLAUDE || 'claude') {

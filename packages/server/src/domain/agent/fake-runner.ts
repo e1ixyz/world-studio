@@ -12,6 +12,7 @@ import path from 'node:path';
 import type { AgentRunner, RunEvents, RunRequest, ToolContent } from './runner.ts';
 
 export class FakeRunner implements AgentRunner {
+  readonly name = 'fake';
   readonly hostsTools = true;
 
   start(req: RunRequest, on: RunEvents) {

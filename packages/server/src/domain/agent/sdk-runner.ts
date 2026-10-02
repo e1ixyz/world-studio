@@ -16,6 +16,7 @@ export function resolveClaude(bin = process.env.DEVCHAT_CLAUDE || 'claude') {
 }
 
 export class SdkRunner implements AgentRunner {
+  readonly name = 'sdk';
   readonly hostsTools = true;
 
   start(req: RunRequest, on: RunEvents) {

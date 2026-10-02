@@ -62,6 +62,10 @@ export function createApi(studio: Studio) {
       });
     })
     .get('/checkpoints', (c) => c.json(checkpoints.list(c.req.param('slug') as string)))
+    // the recent log as JSON (the events stream is the live view of the same items)
+    .get('/log', (c) => c.json(chats.log(c.req.param('slug') as string)))
+    // recent agent runs: prompt, runner, model, duration, cost, outcome
+    .get('/runs', async (c) => c.json((await studio.repo.recentRuns?.(c.req.param('slug') as string)) ?? []))
     .get('/checkpoints/:id/diff', (c) => {
       const d = checkpoints.diff?.(c.req.param('slug') as string, c.req.param('id'));
       return d ? c.json(d) : c.json({ error: 'No diff for this checkpoint' }, 404);

@@ -53,6 +53,7 @@ bun run test         # Vitest unit tests (test/unit/)
 bun run test:e2e     # vite build, then Playwright on web and Electron (e2e/)
 bun run typecheck    # TypeScript 7 over packages/*/src
 bun run lint         # Biome (games/ and templates/ are excluded)
+bun run export <slug>  # one game as a static site in exports/<slug>/
 ```
 
 - bun is only the package manager (`bunfig.toml` sets the hoisted linker). Everything runs on Node 24, which strips TypeScript types itself, so `packages/` runs from source with no build step. Electron 44's Node (24.21) does the same in a utilityProcess.
@@ -102,6 +103,27 @@ One Node process per checkout owns the harness: chats, agent jobs, checkpoints a
 
 - Parity rule: every change has to work in both the browser and the app. `CLAUDE.md` tells Claude to run the project skill `.claude/skills/parity/SKILL.md` before finishing; it lists where the two differ and how to check each side. `bun run test:e2e` covers both. `.claude/skills/parity/scripts/cdp.mjs` drives an app window over DevTools (`npx electron . --remote-debugging-port=9333`). The in-app agent skips it.
 
+## Database: `packages/db/`
+
+Drizzle with a Postgres schema (`src/schema.ts`) and generated migrations (`drizzle/`; after a schema change run `bun run --cwd packages/db generate`). Locally it runs on PGlite, Postgres compiled to WASM, so there's no native module and it works in both system Node and Electron's. The same schema and migrations would serve a hosted Postgres.
+
+- Tables:
+  - `conversations`: one per "New conversation"; the active one has `archived_at` null.
+  - `chat_items`: the log; `seq` grows per project and never resets.
+  - `runs`: one per prompt, with runner, model, duration, `cost_usd`, outcome, denials and the checkpoint id.
+  - Every row has `workspace_id` (`'local'`).
+- `openDatabase()` migrates on open, in about 0.7 s. The locked daemon uses `.harness/db/` (about 40 MB). Private daemons (`--no-lock`, so tests and an isolated app) use an in-memory database, because only one process may open a PGlite folder.
+- `DbChatRepository` (`packages/server/src/domain/db-store.ts`) reads the active conversations once at startup; after that `ChatService` works from memory and every append, session change, reset and run is written in order in the background. `studio.close()` flushes and closes the database (the daemon awaits it on shutdown).
+- On first open it imported each `.harness/projects/<slug>/chat.json` (verified 2026-10-02: 127, 73 and 72 items). The files stay as a backup and are no longer written; a project is never imported twice.
+- Deleting a project archives its conversation, so a new project with the same slug starts clean while the history stays.
+- Not in the database: game code and `game.json` (files the agent edits), `tweaks.json`, settings (`.harness/settings.json`, hand-editable), checkpoints (git).
+- Routes: `GET /chat/<slug>/log` is the recent log as JSON, and `GET /chat/<slug>/runs` the recent runs. The "Done" line now shows each run's cost.
+- `JsonChatRepository` (the old files) is still there for `createStudio()` without a database (unit tests).
+
+## Exporting a game: `bun run export <slug>`
+
+`scripts/export-game.mjs` builds one game into `exports/<slug>/` (gitignored): `index.html` plus assets, with relative paths and only that game bundled (it narrows the globs in `engine/registry.prod.js`). It sets `VITE_WS_GAME`, so the runtime plays the game with no `?game=` and the start menu hides "All projects". Serve the folder with any static server; Meridian is 0.8 MB. Verified on 2026-10-02 from `python3 -m http.server`.
+
 ## Tests: `test/unit/`, `e2e/`
 
 - `test/unit/` (Vitest): rng sequences (Meridian's seed is pinned), collision, GeoBuilder, Tweaks, Selection (including the exact `describe()` text), and the shared zod schemas against the real `.harness/` and `games/` data.
@@ -117,10 +139,9 @@ One Node process per checkout owns the harness: chats, agent jobs, checkpoints a
 
 The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Every phase keeps the three games and both surfaces working.
 
-- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`), P4 (git checkpoints with diffs), P5 (Agent SDK runner, engine types, `check_game`, `env.setSky()`), P6a (React studio with the landing page), P6b (project shell: game frame, bridge, React Ask panel), P7 part 1 (live-game tools and permission cards).
+- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`), P4 (git checkpoints with diffs), P5 (Agent SDK runner, engine types, `check_game`, `env.setSky()`), P6a (React studio with the landing page), P6b (project shell: game frame, bridge, React Ask panel), P7 part 1 (live-game tools and permission cards), P8 (PGlite + Drizzle database for chats and runs, single-game export).
 - Next:
   - P7 part 2: move build mode's top bar, Properties and tweaks panels into React over the bridge (`engine/build/buildmode.js` keeps the camera, picking and the selection tag).
-  - P8: PGlite + Drizzle database and the play-only export.
 - Open follow-up: `games/meridian-city/game.js` still sets the Sky shader's uniforms directly for its Sky tweaks. That code is in uncommitted work on the game, so it was left alone; switch it to `ctx.env.setSky()`.
 - `engine/` stays at the repo root on purpose: games import it by relative path, and the agent's edit rules and old checkpoints use that path.
 
@@ -130,7 +151,7 @@ The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Eve
 engine/      shared runtime every game runs on
 games/       one folder per project (games/<slug>/)
 templates/   starting points copied into games/<slug>/ on create
-packages/    server (studio daemon, API, domain), shared (zod schemas), bridge (studio <-> game frame)
+packages/    server (studio daemon, API, domain), shared (zod schemas), bridge (studio <-> game frame), db (Drizzle schema, PGlite)
 apps/studio/ React studio UI: landing page, project shell, Ask panel
 apps/desktop/ Electron shell for the macOS app
 test/unit/   Vitest unit tests;  e2e/  Playwright suite (web + Electron)
@@ -184,7 +205,8 @@ Templates are copied, never linked. See Gotchas.
 ### `.harness/`
 
 - `settings.json` - studio-wide settings, currently only `alwaysEngine`. Both the browser dev server and the desktop app read it fresh on every prompt.
-- `projects/<slug>/chat.json` - chat log and Claude session id for each project. Meridian's chat history from before the restructure was migrated here.
+- `db/` - the studio database (PGlite): conversations, chat items, runs. See Database.
+- `projects/<slug>/chat.json` - the chat logs from before the database, imported into it once and kept as a backup.
 - `git/<slug>.git`, `git/engine.git` - checkpoint history (see Checkpoints).
 - `checkpoints/<slug>/<id>/` - legacy folder checkpoints from before git history, still listed and restorable.
 - `shots/<slug>/` - screenshots attached to prompts.
@@ -242,7 +264,7 @@ Request bodies are checked against the zod schemas in `packages/shared/src/schem
 - `GET /chat/<slug>/events` is an SSE stream. It replays the log after `Last-Event-ID` or `?since=`, then streams live.
 - `POST /chat/<slug>/prompt` takes `{ text, display, engine }`, and `/stop`, `/reset` and `/restore` round it out. `GET /chat/<slug>/checkpoints` lists checkpoints.
 - One Claude job per project at a time. A second prompt gets a 409.
-- The log keeps the last 400 items and persists to `.harness/projects/<slug>/chat.json`.
+- The panel replays the last 400 items. The full log lives in the database (see Database).
 
 ### Claude runs
 
@@ -321,7 +343,7 @@ Git history, kept out of the user's own repository (`domain/checkpoints/git.ts`,
 
 ### Cost
 
-Each prompt is a real Claude Code run billed to the user's account. A tiny edit on the old single-game setup cost about $0.37. The chat shows the run time in its "Done" line. The cost is saved on the `done` item in `chat.json` but not shown.
+Each prompt is a real Claude Code run billed to the user's account. A tiny edit on the old single-game setup cost about $0.37. The chat shows the run time and cost in its "Done" line; every run is also a row in the `runs` table.
 
 ## Project shell and Ask panel: `apps/studio/src/routes/p.$slug.tsx`, `packages/bridge/`
 

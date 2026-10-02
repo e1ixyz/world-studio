@@ -60,7 +60,8 @@ export async function gameFrame(page) {
   return handle.contentFrame();
 }
 
-export const readChat = (slug) => JSON.parse(fs.readFileSync(path.join(ROOT, '.harness/projects', slug, 'chat.json'), 'utf8'));
+// The project's chat log, from the daemon (chats live in its database).
+export const chatLog = async (base, slug) => (await api(base, `/chat/${slug}/log`)).body || [];
 export const gameFile = (slug, file = 'game.js') => fs.readFileSync(path.join(ROOT, 'games', slug, file), 'utf8');
 
 // Wait for the game's in-place reload inside its frame: the marker set on the old window

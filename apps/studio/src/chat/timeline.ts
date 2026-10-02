@@ -54,7 +54,8 @@ export function buildTimeline(items: LogItem[]): Block[] {
         // earlier messages in the turn were progress notes; the last one is the answer
         if (turn) for (const i of turn.texts.slice(0, -1)) (blocks[i] as Extract<Block, { k: 'text' }>).progress = true;
         const ms = item.meta?.ms || (turn ? (item.ts || Date.now()) - turn.start : 0);
-        blocks.push({ k: 'note', key, text: `Done${ms ? ` in ${secs(ms)}` : ''}` });
+        const cost = item.meta?.cost;
+        blocks.push({ k: 'note', key, text: `Done${ms ? ` in ${secs(ms)}` : ''}${cost ? ` · $${cost < 0.01 ? cost.toFixed(3) : cost.toFixed(2)}` : ''}` });
         turn = null;
         break;
       }

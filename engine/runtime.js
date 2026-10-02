@@ -19,7 +19,8 @@ import './build/build.css';
 
 const DEV = import.meta.env.DEV;
 const params = new URLSearchParams(location.search);
-const slug = location.pathname.match(/^\/play\/([\w-]+)/)?.[1] || params.get('game');
+// an exported single game (bun run export <slug>) plays its own game when the URL names none
+const slug = location.pathname.match(/^\/play\/([\w-]+)/)?.[1] || params.get('game') || import.meta.env.VITE_WS_GAME;
 const NO_INPUT = { fwd: false, back: false, left: false, right: false, sprint: false, jump: false, down: false };
 
 async function loadModule(s) {

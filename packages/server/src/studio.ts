@@ -1,13 +1,16 @@
 // Wires the studio's services together. One Studio per daemon; the Vite plugin and the HTTP API
 // are thin adapters over it.
 import fs from 'node:fs';
+import path from 'node:path';
+import { openDatabase } from '@ws/db';
 import type { AgentRunner } from './domain/agent/runner.ts';
 import { CliRunner } from './domain/agent/cli-runner.ts';
 import { FakeRunner } from './domain/agent/fake-runner.ts';
 import { SdkRunner } from './domain/agent/sdk-runner.ts';
 import { checkGame } from './domain/check-game.ts';
 import { ChatService } from './domain/chat.ts';
-import { JsonChatRepository } from './domain/chat-store.ts';
+import { type ChatRepository, JsonChatRepository, type RunRepository } from './domain/chat-store.ts';
+import { DbChatRepository } from './domain/db-store.ts';
 import { FsCheckpointStore } from './domain/checkpoints/fs.ts';
 import { GitCheckpointStore, gitAvailable } from './domain/checkpoints/git.ts';
 import type { CheckpointStore } from './domain/checkpoints/store.ts';
@@ -22,6 +25,9 @@ export interface StudioOptions {
   root: string;
   runner?: AgentRunner;
   checkpoints?: CheckpointStore;
+  // where chats and runs live; JSON files under .harness/projects/ when not given
+  repo?: ChatRepository & RunRepository;
+  onClose?: () => Promise<void>;
 }
 
 export type Studio = ReturnType<typeof createStudio>;
@@ -35,14 +41,32 @@ export function defaultRunner(env = process.env): AgentRunner {
   return choice === 'cli' ? new CliRunner() : new SdkRunner();
 }
 
-export function createStudio({ root, runner = defaultRunner(), checkpoints }: StudioOptions) {
+// The daemon's studio: chats and runs in the database. `memory` gives a throwaway database (test
+// daemons, which run beside a real one and must not open its folder).
+export async function openStudio(opts: Omit<StudioOptions, 'repo' | 'onClose'> & { database: 'file' | 'memory' }) {
+  const paths = studioPaths(opts.root);
+  const { db, close } = await openDatabase(opts.database === 'file' ? { dataDir: path.join(paths.data, 'db') } : { memory: true });
+  const repo = await DbChatRepository.open(db, paths);
+  return createStudio({
+    ...opts,
+    repo,
+    onClose: async () => {
+      await repo.flush();
+      await close();
+    },
+  });
+}
+
+export function createStudio({ root, runner = defaultRunner(), checkpoints, repo, onClose }: StudioOptions) {
   const paths = studioPaths(root);
+  const store_: ChatRepository & RunRepository = repo ?? new JsonChatRepository(paths);
   const events = new StudioEvents();
   const settings = new SettingsStore(paths, events);
   // Git history when git is installed; folder copies otherwise.
   const store: CheckpointStore = checkpoints ?? (gitAvailable() ? new GitCheckpointStore(paths) : new FsCheckpointStore(paths));
   let invalidator: ModuleInvalidator = { invalidateFiles() {}, invalidateAll() {} };
   const live = new LiveGames(events);
+  let closing: Promise<void> | null = null;
 
   // biome-ignore lint/style/useConst: assigned below, used by the closures before that
   let chats: ChatService;
@@ -68,7 +92,8 @@ export function createStudio({ root, runner = defaultRunner(), checkpoints }: St
   });
   chats = new ChatService({
     paths,
-    repo: new JsonChatRepository(paths),
+    repo: store_,
+    runs: store_,
     runner,
     checkpoints: store,
     projects,
@@ -97,9 +122,15 @@ export function createStudio({ root, runner = defaultRunner(), checkpoints }: St
     setInvalidator(i: ModuleInvalidator) {
       invalidator = i;
     },
-    close() {
+    repo: store_,
+    // Stops agent runs and timers, then lets pending writes land. Safe to call more than once.
+    async close() {
       chats.stopAll();
       reloads.dispose();
+      await (closing ??= (async () => {
+        await store_.flush();
+        await onClose?.();
+      })());
     },
   };
 }

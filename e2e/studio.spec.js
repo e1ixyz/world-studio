@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DOM, ROOT, api, gameFrame, expect, gameFile, markWindow, openGame, readChat, test, waitForReload, withTempProject } from './fixtures.js';
+import { DOM, ROOT, api, chatLog, expect, gameFile, gameFrame, markWindow, openGame, test, waitForReload, withTempProject } from './fixtures.js';
 
 const GAMES = ['meridian-city', 'cyberpunk-city', 'medieval-village'];
 
@@ -118,14 +118,8 @@ test('edits outside the game are reported as blocked', async ({ page, base }) =>
   await withTempProject(page, base, async (slug) => {
     await page.goto(`${base}/`, DOM);
     await api(page, `/chat/${slug}/prompt`, { text: 'touch the engine [deny] [noedit]' });
-    await expect.poll(() => {
-      try {
-        return readChat(slug).log.map((i) => i.kind);
-      } catch {
-        return [];
-      }
-    }).toContain('done');
-    const blocked = readChat(slug).log.find((i) => i.kind === 'status' && i.text.startsWith('Blocked edits outside this game'));
+    await expect.poll(async () => (await chatLog(base, slug)).map((i) => i.kind)).toContain('done');
+    const blocked = (await chatLog(base, slug)).find((i) => i.kind === 'status' && i.text.startsWith('Blocked edits outside this game'));
     expect(blocked?.text).toContain('engine/core/app.js');
   });
 });

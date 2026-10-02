@@ -59,6 +59,7 @@ export interface RunHandle {
 }
 
 export interface AgentRunner {
+  readonly name: 'sdk' | 'cli' | 'fake';
   // Whether `tools` reach the agent.
   readonly hostsTools: boolean;
   start(req: RunRequest, on: RunEvents): RunHandle;

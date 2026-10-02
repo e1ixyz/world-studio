@@ -4,7 +4,7 @@
 import type { ChatItem, ChatItemKind, ChatState } from '@ws/shared';
 import { type AgentRunner, type AskPermission, type RunHandle, STUDIO_TOOL_PREFIX, type StudioTool } from './agent/runner.ts';
 import { type CheckResult, diagKey, formatCheck } from './check-game.ts';
-import type { ChatRepository } from './chat-store.ts';
+import { type ChatRepository, MAX_LOG, type RunRepository } from './chat-store.ts';
 import type { CheckpointStore } from './checkpoints/store.ts';
 import type { LiveGames } from './live.ts';
 import type { StudioEvents } from './events.ts';
@@ -13,7 +13,6 @@ import type { Projects } from './projects.ts';
 import { systemPrompt } from './prompts.ts';
 import type { SettingsStore } from './settings.ts';
 
-export const MAX_LOG = 400;
 export const PERMISSION_TIMEOUT_MS = 5 * 60_000;
 export const BASE_TOOLS = ['Read', 'Glob', 'Grep', 'Bash(npx vite build:*)'];
 
@@ -27,6 +26,8 @@ interface Job {
   checkpoint: string;
   // open permission questions, by id
   asks: Map<string, (allow: boolean, state?: 'expired') => void>;
+  run: Promise<string | null>;
+  outcome: { ok?: boolean; subtype?: string; ms?: number; costUsd?: number; denials?: unknown[] };
   // what the user explicitly declined (file paths or tool names), so the end-of-run "blocked" note skips it
   declined: Set<string>;
 }
@@ -39,7 +40,6 @@ interface Chat {
   listeners: Set<Listener>;
   closers: Set<() => void>;
   job: Job | null;
-  saveTimer: ReturnType<typeof setTimeout> | null;
   lastJobEnd: number;
 }
 
@@ -78,6 +78,7 @@ export function describeTool(p: StudioPaths, name: string, input: Record<string,
 export interface ChatDeps {
   paths: StudioPaths;
   repo: ChatRepository;
+  runs?: RunRepository;
   runner: AgentRunner;
   checkpoints: CheckpointStore;
   projects: Projects;
@@ -106,15 +107,10 @@ export class ChatService {
     let c = this.chats.get(slug);
     if (!c) {
       const saved = this.d.repo.load(slug);
-      c = { slug, sessionId: saved.sessionId || null, seq: saved.seq || 0, log: saved.log || [], listeners: new Set(), closers: new Set(), job: null, saveTimer: null, lastJobEnd: 0 };
+      c = { slug, sessionId: saved.sessionId || null, seq: saved.seq || 0, log: [...(saved.log || [])], listeners: new Set(), closers: new Set(), job: null, lastJobEnd: 0 };
       this.chats.set(slug, c);
     }
     return c;
-  }
-
-  private save(c: Chat) {
-    if (c.saveTimer) clearTimeout(c.saveTimer);
-    c.saveTimer = setTimeout(() => this.d.repo.save(c.slug, { sessionId: c.sessionId, seq: c.seq, log: c.log }), 200);
   }
 
   push(slug: string, kind: ChatItemKind, text: string, meta?: Record<string, unknown>) {
@@ -123,7 +119,7 @@ export class ChatService {
     c.log.push(item);
     if (c.log.length > MAX_LOG) c.log.splice(0, c.log.length - MAX_LOG);
     for (const fn of c.listeners) fn(item);
-    this.save(c);
+    this.d.repo.append(slug, item);
     return item;
   }
 
@@ -150,6 +146,10 @@ export class ChatService {
       c.listeners.delete(fn);
       if (onClose) c.closers.delete(onClose);
     };
+  }
+
+  log(slug: string): ChatItem[] {
+    return [...this.chat(slug).log];
   }
 
   isRunning(slug: string) {
@@ -179,7 +179,9 @@ export class ChatService {
     if (engine) tools.push(...allow(paths.engine));
     const studioTools = this.studioTools(slug);
     tools.push(...studioTools.map((t) => STUDIO_TOOL_PREFIX + t.name));
-    const job: Job = { handle: { stop() {} }, startedAt: Date.now(), engine, checkpoint, asks: new Map(), declined: new Set() };
+    const startedAt = Date.now();
+    const run = this.d.runs?.start({ slug, prompt: display || prompt, runner: this.d.runner.name, model: process.env.DEVCHAT_MODEL, engine, checkpointId: checkpoint, startedAt }).catch(() => null) ?? Promise.resolve(null);
+    const job: Job = { handle: { stop() {} }, startedAt, engine, checkpoint, asks: new Map(), declined: new Set(), run, outcome: {} };
     c.job = job;
     job.handle = this.d.runner.start(
       {
@@ -199,13 +201,16 @@ export class ChatService {
       },
       {
         session: (id) => {
+          if (c.sessionId === id) return;
           c.sessionId = id;
+          this.d.repo.setSession(slug, id);
         },
         text: (text) => this.push(slug, 'text', text),
         tool: (name, input) => this.push(slug, 'tool', describeTool(paths, name, input), { name }),
         result: (r) => {
           const denials = r.denials.filter((d) => !job.declined.has(d.tool_input?.file_path || d.tool_name));
           r = { ...r, denials };
+          job.outcome = { ok: r.ok, subtype: r.subtype, ms: r.ms, costUsd: r.cost, denials: r.denials };
           const files = [...new Set(r.denials.filter((d) => d.tool_input?.file_path).map((d) => relPath(paths, d.tool_input?.file_path)))];
           const tools = [...new Set(r.denials.filter((d) => !d.tool_input?.file_path).map((d) => d.tool_name))];
           if (files.length) {
@@ -232,7 +237,7 @@ export class ChatService {
             this.push(slug, 'error', `Couldn't record this change in the checkpoint history: ${(err as Error).message}`);
           }
           this.d.projects.touch(slug);
-          this.save(c);
+          this.d.runs?.finish(job.run, { ...job.outcome, error, stopped });
           this.broadcastState(c);
           c.lastJobEnd = Date.now();
           this.d.onJobEnd(slug);
@@ -350,6 +355,7 @@ export class ChatService {
     if (c.job) throw new BusyError('busy');
     c.sessionId = null;
     c.log = [];
+    this.d.repo.reset(slug);
     this.push(slug, 'status', 'New conversation');
     this.broadcastState(c);
   }
@@ -365,8 +371,8 @@ export class ChatService {
   forget(slug: string) {
     if (this.isRunning(slug)) throw new BusyError('A change is still running on this project');
     const c = this.chats.get(slug);
+    this.d.repo.remove(slug);
     if (!c) return;
-    if (c.saveTimer) clearTimeout(c.saveTimer);
     this.chats.delete(slug);
     for (const close of c.closers) close();
   }

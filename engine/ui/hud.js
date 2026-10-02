@@ -92,7 +92,7 @@ export class HUD {
       ${tag ? `<p class="tag">${tag}</p>` : ''}
       <button id="play" ${disabled ? 'disabled' : ''}>${button}</button>
       <div class="controls">${controls.map(([k, l]) => `<div><kbd>${k}</kbd> ${l}</div>`).join('')}</div>
-      <a class="back" href="/">← All projects</a>`;
+      ${import.meta.env.VITE_WS_GAME ? '' : '<a class="back" href="/">← All projects</a>'}`;
     if (onPlay) p.querySelector('#play').addEventListener('click', onPlay);
     this.menuEl.classList.remove('hidden');
   }

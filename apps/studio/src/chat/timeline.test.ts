@@ -13,7 +13,7 @@ describe('buildTimeline', () => {
       item('text', 'Reading the weather code'),
       item('tool', 'Edit games/x/fx.js'),
       item('text', 'Added rain.'),
-      item('done', '', { ms: 65000 }),
+      item('done', '', { ms: 65000, cost: 0.0956 }),
       item('reload', 'Reloading with 2 changed files'),
     ]);
     expect(blocks.map((b) => b.k)).toEqual(['user', 'steps', 'text', 'steps', 'text', 'note', 'reload']);
@@ -21,7 +21,7 @@ describe('buildTimeline', () => {
     expect(blocks[1]).toMatchObject({ steps: ['Read games/x/game.js', 'Edit games/x/game.js'] });
     expect(blocks[2]).toMatchObject({ progress: true });
     expect(blocks[4]).toMatchObject({ text: 'Added rain.', progress: false });
-    expect(blocks[5]).toMatchObject({ text: 'Done in 1m 5s' });
+    expect(blocks[5]).toMatchObject({ text: 'Done in 1m 5s · $0.10' });
   });
 
   it('times a turn from its timestamps when the result has no duration', () => {

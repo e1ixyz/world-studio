@@ -63,7 +63,7 @@ export function studioPlugin(studio: Studio): Plugin {
     },
     // runs on server.close(): don't leave agent runs behind
     closeBundle() {
-      studio.close();
+      return studio.close();
     },
   };
 }
