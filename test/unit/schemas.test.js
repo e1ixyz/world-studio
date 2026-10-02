@@ -29,3 +29,11 @@ describe('shared schemas match existing data', () => {
     if (fs.existsSync(f)) expect(Settings.safeParse(read(f)).error).toBeUndefined();
   });
 });
+
+describe('settings', () => {
+  it('defaults the theme and falls back from an unknown one', () => {
+    expect(Settings.parse({})).toEqual({ alwaysEngine: false, theme: 'control-room' });
+    expect(Settings.parse({ alwaysEngine: true, theme: 'vaporwave' })).toEqual({ alwaysEngine: true, theme: 'control-room' });
+    expect(Settings.parse({ theme: 'arcade' }).theme).toBe('arcade');
+  });
+});

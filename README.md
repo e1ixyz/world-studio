@@ -29,6 +29,10 @@ Logs go to `~/Library/Logs/World Studio/main.log`.
 
 `bun run build` makes a production build in `dist/`, and `bun run preview` serves it. The production build plays the games but has no chat, no build mode, no project editing and no saving. `bun run export <slug>` builds a single game the same way into `exports/<slug>/`, ready for any static host.
 
+### Themes
+
+Settings (on the landing page, or in the Ask panel's ⋯ menu) switches the whole studio between six themes: Control Room, Floating Canvas, Blueprint, Terminal, Arcade and Atlas. The game's HUD follows too. The choice is shared by the browser and the desktop app.
+
 ## How to use it
 
 The landing page lists your projects. Click a card to play, or use New project to start one from a template. If you describe the game in the New project dialog, Claude builds a first version as its opening prompt, and the project opens in build mode.

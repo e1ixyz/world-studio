@@ -3,7 +3,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import '../../../../engine/ui/tokens.css';
 import type { BuildState } from '@ws/bridge';
 import { BuildPanels } from '../build/build-panels.tsx';
 import { AskPanel, type AskPanelHandle, type GameView } from '../chat/ask-panel.tsx';
@@ -12,6 +11,7 @@ import { feedFor, type LogItem } from '../chat/timeline.ts';
 import { useChat } from '../chat/use-chat.ts';
 import { useGameBridge } from '../chat/use-game-bridge.ts';
 import { api, projectsQuery } from '../lib/api.ts';
+import { useTheme } from '../lib/theme.ts';
 
 export const Route = createFileRoute('/p/$slug')({
   component: ProjectShell,
@@ -38,6 +38,7 @@ function ProjectShell() {
   const seenErrors = useRef(new Set<string>());
 
   const project = useQuery(projectsQuery).data?.find((p) => p.slug === slug);
+  const theme = useTheme();
   useEffect(() => {
     document.title = `${project?.name || slug} · World Studio`;
   }, [project?.name, slug]);
@@ -95,6 +96,7 @@ function ProjectShell() {
         break;
       case 'ready':
         post({ t: 'panel', open });
+        post({ t: 'theme', theme });
         break;
     }
   });
@@ -123,6 +125,9 @@ function ProjectShell() {
     // build mode's panels make room for the Ask panel the same way they always have
     document.body.classList.toggle('devchat-open', open);
   }, [open, slug, post]);
+
+  // the game's HUD, label and quick bar follow the studio's theme
+  useEffect(() => post({ t: 'theme', theme }), [theme, post]);
 
   // keys while the studio page (not the game) has focus
   useEffect(() => {

@@ -2,26 +2,32 @@
 @import 'tailwindcss' source(none);
 @source './';
 
-/* World Studio tokens (same values as engine/ui/tokens.css, which build mode and the chat use). */
-@theme {
-  --font-sans: 'Chakra Petch', system-ui, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
-  --color-bg: #070b12;
-  --color-surface: #0b111c;
-  --color-card: rgba(255, 255, 255, 0.035);
-  --color-ink: #eef6ff;
-  --color-dim: rgba(238, 246, 255, 0.58);
-  --color-line: rgba(255, 255, 255, 0.12);
-  --color-line-strong: rgba(255, 255, 255, 0.3);
-  --color-accent: #3cf2ff;
-  --color-accent-ink: #041016;
-  --color-select: #ffd24a;
-  --color-danger: #ff8a7a;
-  --color-danger-ink: #1a0805;
-  --color-danger-text: #ffb4a8;
-  --shadow-glow: 0 0 30px rgba(60, 242, 255, 0.3);
-  --shadow-glow-strong: 0 0 44px rgba(60, 242, 255, 0.55);
-  --shadow-dialog: 0 30px 90px rgba(0, 0, 0, 0.6);
+/* Colors and fonts come from the active theme's variables (engine/ui/tokens.css for Control Room,
+   packages/theme/src/themes.css for the rest), so every Tailwind utility follows a theme switch. */
+@theme inline {
+  --font-sans: var(--ws-font);
+  --font-display: var(--ws-display);
+  --font-mono: var(--ws-mono);
+  --color-bg: var(--ws-bg);
+  --color-surface: var(--ws-surface);
+  --color-card: var(--ws-card);
+  --color-field: var(--ws-input-bg);
+  --color-ink: var(--ws-ink);
+  --color-dim: var(--ws-dim);
+  --color-line: var(--ws-line);
+  --color-line-strong: var(--ws-line-strong);
+  --color-accent: var(--ws-accent);
+  --color-accent-ink: var(--ws-accent-ink);
+  --color-select: var(--ws-select);
+  --color-select-ink: var(--ws-select-ink);
+  --color-danger: var(--ws-danger);
+  --color-danger-ink: var(--ws-danger-ink);
+  --color-danger-text: var(--ws-danger-text);
+  --radius-ws: var(--ws-radius);
+  --radius-ws-lg: var(--ws-radius-lg);
+  --shadow-glow: 0 0 30px color-mix(in oklab, var(--ws-accent) 30%, transparent);
+  --shadow-glow-strong: 0 0 44px color-mix(in oklab, var(--ws-accent) 55%, transparent);
+  --shadow-dialog: 0 30px 90px rgba(0, 0, 0, 0.35);
   --ease-ws: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -29,21 +35,17 @@
   html,
   body {
     min-height: 100%;
-    background: var(--color-bg);
-    color: var(--color-ink);
-    font-family: var(--font-sans);
+    background: var(--ws-bg);
+    color: var(--ws-ink);
+    font-family: var(--ws-font);
   }
   body {
-    background:
-      radial-gradient(1200px 600px at 80% -10%, rgba(60, 242, 255, 0.09), transparent 60%),
-      radial-gradient(900px 500px at -10% 110%, rgba(255, 210, 74, 0.05), transparent 60%),
-      var(--color-bg);
+    background: var(--ws-page-bg);
   }
   button {
     cursor: pointer;
   }
   ::selection {
-    background: rgba(60, 242, 255, 0.35);
-    color: #fff;
+    background: color-mix(in oklab, var(--ws-accent) 35%, transparent);
   }
 }

@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { CreateProjectDialog } from '../components/create-project-dialog.tsx';
 import { ProjectCard } from '../components/project-card.tsx';
+import { SettingsDialog } from '../components/settings-dialog.tsx';
 import { Button } from '../components/ui/button.tsx';
 import { DEV, projectsQuery } from '../lib/api.ts';
 
@@ -24,13 +25,14 @@ function useNow(ms = 60_000) {
 function Landing() {
   const { data: projects = [], error } = useQuery(projectsQuery);
   const [creating, setCreating] = useState(false);
+  const [settings, setSettings] = useState(false);
   const now = useNow();
   return (
     <div className="mx-auto max-w-[1180px] px-6 pt-14 pb-20">
       <header className="flex flex-wrap items-end justify-between gap-6">
         <div>
           <div className="text-xs uppercase tracking-[0.3em] text-accent">World Studio</div>
-          <h1 className="mt-2.5 text-[clamp(40px,7vw,64px)] font-bold leading-[0.95] tracking-[0.02em]">
+          <h1 className="mt-2.5 font-display text-[clamp(40px,7vw,64px)] font-bold leading-[0.95] tracking-[0.02em]">
             Build worlds <span className="tracking-[0.1em] text-transparent [-webkit-text-stroke:1.5px_var(--color-ink)]">live</span>
           </h1>
           <p className="mt-3.5 max-w-[58ch] text-base leading-[1.55] text-dim">
@@ -38,9 +40,14 @@ function Landing() {
           </p>
         </div>
         {DEV && (
-          <Button variant="primary" size="lg" onClick={() => setCreating(true)}>
-            New project
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button size="lg" onClick={() => setSettings(true)}>
+              Settings
+            </Button>
+            <Button variant="primary" size="lg" onClick={() => setCreating(true)}>
+              New project
+            </Button>
+          </div>
         )}
       </header>
       <h2 className="mt-12 mb-4 text-[13px] uppercase tracking-[0.24em] text-dim">Projects</h2>
@@ -55,7 +62,7 @@ function Landing() {
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="grid min-h-[250px] place-items-center border border-dashed border-accent/40 bg-accent/[0.03] text-[15px] font-bold uppercase tracking-[0.16em] text-accent hover:bg-accent/[0.07]"
+              className="grid min-h-[250px] place-items-center rounded-ws-lg border border-dashed border-accent/40 bg-accent/[0.03] text-[15px] font-bold uppercase tracking-[0.16em] text-accent hover:bg-accent/[0.07]"
             >
               <div>
                 <span className="block text-center text-[40px] font-normal">+</span>New project
@@ -67,6 +74,7 @@ function Landing() {
         </div>
       )}
       {DEV && <CreateProjectDialog open={creating} onOpenChange={setCreating} />}
+      {DEV && <SettingsDialog open={settings} onOpenChange={setSettings} />}
     </div>
   );
 }

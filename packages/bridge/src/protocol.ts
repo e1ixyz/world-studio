@@ -73,6 +73,8 @@ export const StudioMessage = z.discriminatedUnion('t', [
   z.object({ ...envelope, t: z.literal('requestContext'), id: z.number() }),
   z.object({ ...envelope, t: z.literal('screenshot') }),
   z.object({ ...envelope, t: z.literal('exitPointerLock') }),
+  // the studio's theme, so the game's HUD, label and quick bar match it
+  z.object({ ...envelope, t: z.literal('theme'), theme: z.string() }),
   // a question from the agent: 'screenshot' (the view as a JPEG data URL) or 'state' (JSON)
   z.object({ ...envelope, t: z.literal('probe'), id: z.string(), what: z.enum(['screenshot', 'state']) }),
   // build mode, from the studio's panels

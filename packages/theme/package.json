@@ -1,0 +1,10 @@
+{
+  "name": "@ws/theme",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/themes.ts",
+    "./themes.css": "./src/themes.css"
+  }
+}

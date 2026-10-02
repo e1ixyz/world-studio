@@ -1,7 +1,7 @@
 // Studio data access. In dev everything goes through the daemon's typed API; a production build
 // has no server, so the project list comes from the game.json files bundled at build time.
 import { studioClient } from '@ws/server/client';
-import type { GameMeta, Project, Template } from '@ws/shared';
+import type { GameMeta, Project, Settings, Template } from '@ws/shared';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const DEV = import.meta.env.DEV;
@@ -35,6 +35,24 @@ export const projectsQuery = queryOptions({
   queryKey: ['projects'],
   queryFn: () => (DEV ? ok<Project[]>(api.projects.$get()) : prodProjects()),
 });
+
+// Studio settings (theme, engine edits). In a production build there is no server: the
+// remembered theme applies and nothing can be changed.
+export const settingsQuery = queryOptions({
+  queryKey: ['settings'],
+  queryFn: () => ok<Settings>(api.settings.$get()),
+  enabled: DEV,
+});
+
+export function useSaveSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<Settings>) => ok<Settings>(api.settings.$post({ json: patch })),
+    onMutate: (patch) => qc.setQueryData(['settings'], (s: Settings | undefined) => (s ? { ...s, ...patch } : s)),
+    onSuccess: (s) => qc.setQueryData(['settings'], s),
+    onError: () => qc.invalidateQueries({ queryKey: ['settings'] }),
+  });
+}
 
 export const templatesQuery = queryOptions({
   queryKey: ['templates'],

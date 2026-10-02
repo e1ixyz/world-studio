@@ -28,6 +28,7 @@
         "@ws/bridge": "workspace:*",
         "@ws/server": "workspace:*",
         "@ws/shared": "workspace:*",
+        "@ws/theme": "workspace:*",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "hono": "^4.13.12",
@@ -57,6 +58,7 @@
       "name": "@ws/bridge",
       "version": "0.0.0",
       "dependencies": {
+        "@ws/theme": "workspace:*",
         "zod": "^4.6.5",
       },
     },
@@ -88,8 +90,13 @@
       "name": "@ws/shared",
       "version": "0.0.0",
       "dependencies": {
+        "@ws/theme": "workspace:*",
         "zod": "^4.6.5",
       },
+    },
+    "packages/theme": {
+      "name": "@ws/theme",
+      "version": "0.0.0",
     },
   },
   "packages": {
@@ -554,6 +561,8 @@
     "@ws/shared": ["@ws/shared@workspace:packages/shared"],
 
     "@ws/studio": ["@ws/studio@workspace:apps/studio"],
+
+    "@ws/theme": ["@ws/theme@workspace:packages/theme"],
 
     "@xmldom/xmldom": ["@xmldom/xmldom@0.9.12", "", {}, "sha512-5AXjrcMClTryPe9LgZrygpB1lj7s0S9E0+W+AHaVKAVyHanafK86iPSvG5xHVSp/jC+VH1UXu0TAEmY279xH7A=="],
 

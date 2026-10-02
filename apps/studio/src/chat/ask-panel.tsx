@@ -1,9 +1,10 @@
 // The Ask panel: the project's chat with Claude, its checkpoints and the composer. It lives in the
 // studio page, outside the game frame, so it keeps working when the game reloads or crashes.
-import type { CheckpointMeta, Settings } from '@ws/shared';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { CheckpointMeta } from '@ws/shared';
+import { useQuery } from '@tanstack/react-query';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { api } from '../lib/api.ts';
+import { SettingsDialog } from '../components/settings-dialog.tsx';
+import { api, settingsQuery, useSaveSettings } from '../lib/api.ts';
 import { Icon } from './icon.tsx';
 import { md } from './markdown.tsx';
 import { type Block, buildTimeline, type LogItem, secs, selectionKind, selectionName } from './timeline.ts';
@@ -63,9 +64,10 @@ export const AskPanel = forwardRef<AskPanelHandle, Props>(function AskPanel(p, r
   });
   const textarea = useRef<HTMLTextAreaElement>(null);
   const log = useRef<HTMLDivElement>(null);
-  const qc = useQueryClient();
 
-  const settings = useQuery({ queryKey: ['settings'], queryFn: () => postJSON(api.settings.$get()) as Promise<Settings> });
+  const settings = useQuery(settingsQuery);
+  const saveSettings = useSaveSettings();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const alwaysEngine = !!settings.data?.alwaysEngine;
   const engineOn = engineArmed || alwaysEngine;
   const selection = p.game.selection && p.game.selection !== dismissedSel ? p.game.selection : '';
@@ -123,14 +125,9 @@ export const AskPanel = forwardRef<AskPanelHandle, Props>(function AskPanel(p, r
     if (alwaysEngine) setEngineArmed(false);
   }, [alwaysEngine]);
   const [menuError, setMenuError] = useState('');
-  async function toggleAlways() {
+  function toggleAlways() {
     setMenuOpen(false);
-    try {
-      const next = await postJSON(api.settings.$post({ json: { alwaysEngine: !alwaysEngine } }));
-      qc.setQueryData(['settings'], next);
-    } catch (err) {
-      setMenuError((err as Error).message || 'Could not save the setting');
-    }
+    saveSettings.mutate({ alwaysEngine: !alwaysEngine }, { onError: (err) => setMenuError(err.message || 'Could not save the setting') });
   }
   async function newConversation() {
     setMenuOpen(false);
@@ -233,6 +230,21 @@ export const AskPanel = forwardRef<AskPanelHandle, Props>(function AskPanel(p, r
                 <span>
                   <b>Always allow engine edits</b>
                   <small>Every prompt, in every project, can change the game and the shared engine.</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="dc-menu-theme"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setSettingsOpen(true);
+                }}
+              >
+                <Icon name="sliders" />
+                <span>
+                  <b>Theme and settings…</b>
+                  <small>Six looks for the whole studio, shared with the desktop app.</small>
                 </span>
               </button>
               <button type="button" role="menuitem" className="dc-menu-new" onClick={newConversation}>
@@ -398,6 +410,7 @@ export const AskPanel = forwardRef<AskPanelHandle, Props>(function AskPanel(p, r
           </button>
         </div>
       </form>
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </aside>
   );
 });

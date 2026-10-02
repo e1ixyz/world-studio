@@ -2,8 +2,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { applyTheme, rememberedTheme } from '@ws/theme';
+import '../../../engine/ui/tokens.css';
+import '@ws/theme/themes.css';
 import { routeTree } from './routeTree.gen.ts';
 import './styles.css';
+
+// Paint in the last theme right away; the studio setting confirms or changes it once loaded.
+applyTheme(rememberedTheme());
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000, refetchOnWindowFocus: true } } });
 const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent' });

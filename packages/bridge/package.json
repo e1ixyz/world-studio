@@ -8,6 +8,7 @@
     "./game-agent": "./src/game-agent.ts"
   },
   "dependencies": {
+    "@ws/theme": "workspace:*",
     "zod": "^4.6.5"
   }
 }

@@ -18,7 +18,7 @@ export function ProjectCard({ project: p, now }: { project: Project; now: number
       <a
         href={playUrl(p.slug)}
         data-testid="project-card"
-        className="group relative flex flex-col border border-line bg-card text-inherit no-underline transition-[border-color,transform] duration-150 hover:-translate-y-0.5 hover:border-accent/45"
+        className="group relative flex flex-col overflow-hidden rounded-ws-lg border border-line bg-card text-inherit no-underline transition-[border-color,transform] duration-150 hover:-translate-y-0.5 hover:border-accent/45"
       >
         <div className="relative aspect-video overflow-hidden bg-[#0c1320]">
           {p.thumb ? (

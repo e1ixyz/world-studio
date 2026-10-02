@@ -1,6 +1,7 @@
 // Wire and storage shapes shared by the studio server, the studio UI and the game bridge.
 // These match what the harness already writes (.harness/projects/<slug>/chat.json and friends),
 // so existing data stays valid. Extend them; don't rename fields.
+import { DEFAULT_THEME, THEME_IDS } from '@ws/theme';
 import { z } from 'zod';
 
 export const Slug = z.string().regex(/^[a-z0-9][a-z0-9-]{0,48}$/);
@@ -93,7 +94,12 @@ export const CheckpointDiff = z.object({
 export type CheckpointDiff = z.infer<typeof CheckpointDiff>;
 export type CheckpointMeta = z.infer<typeof CheckpointMeta>;
 
-export const Settings = z.object({ alwaysEngine: z.boolean().default(false) });
+export const ThemeId = z.enum(THEME_IDS);
+// An unknown theme in settings.json (hand-edited, or from a newer studio) falls back to the default.
+export const Settings = z.object({
+  alwaysEngine: z.boolean().default(false),
+  theme: ThemeId.catch(DEFAULT_THEME).default(DEFAULT_THEME),
+});
 export type Settings = z.infer<typeof Settings>;
 
 // ---- request bodies ----
@@ -112,6 +118,6 @@ export const PromptBody = z.object({
 export const RestoreBody = z.object({ id: z.string() });
 export const PermissionBody = z.object({ allow: z.boolean() });
 export const ProbeResultBody = z.object({ ok: z.boolean(), data: z.unknown().optional(), error: z.string().optional() });
-export const SettingsBody = z.object({ alwaysEngine: z.boolean().optional() });
+export const SettingsBody = z.object({ alwaysEngine: z.boolean().optional(), theme: ThemeId.optional() });
 export const ImageBody = z.object({ slug: Slug, data: z.string() });
 export const TweaksBody = z.object({ slug: Slug, values: z.record(z.string(), z.unknown()).default({}) });

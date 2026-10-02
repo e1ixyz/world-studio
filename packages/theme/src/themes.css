@@ -1,0 +1,287 @@
+/* World Studio themes. Control Room is the default set in engine/ui/tokens.css; each theme below
+   overrides those variables, plus the game HUD's own (--cyan, --ink, --dim, --glass, --line in
+   engine/ui/style.css), and adds the few structural rules that make it more than a palette.
+   Loaded by the studio page and, through the bridge agent, by the framed game page. */
+
+/* ======================= Floating Canvas ======================= */
+:root[data-theme='floating'] {
+  --ws-bg: #f4f4f6;
+  --ws-page-bg: #f4f4f6;
+  --ws-surface: #ffffff;
+  --ws-card: #ffffff;
+  --ws-panel: rgba(255, 255, 255, 0.97);
+  --ws-panel-2: #f4f4f6;
+  --ws-panel-3: #ebebef;
+  --ws-line: rgba(20, 22, 26, 0.1);
+  --ws-line-strong: rgba(20, 22, 26, 0.22);
+  --ws-ink: #15171a;
+  --ws-dim: #4a4f58;
+  --ws-faint: #6b707a;
+  --ws-accent: #5b38f0;
+  --ws-accent-ink: #ffffff;
+  --ws-accent-hover: #4a28dc;
+  --ws-accent-soft: #f1edff;
+  --ws-accent-line: rgba(91, 56, 240, 0.45);
+  --ws-select: #f0b429;
+  --ws-select-ink: #3b2600;
+  --ws-select-hover: #f7c650;
+  --ws-select-soft: #fff4d8;
+  --ws-select-line: #e0a316;
+  --ws-danger: #c8321f;
+  --ws-danger-ink: #ffffff;
+  --ws-danger-text: #9e2414;
+  --ws-danger-soft: #fdecea;
+  --ws-danger-line: rgba(200, 50, 31, 0.45);
+  --ws-input-bg: #f4f4f6;
+  --ws-font: 'Manrope', system-ui, sans-serif;
+  --ws-display: 'Manrope', system-ui, sans-serif;
+  --ws-shadow: 0 8px 30px rgba(20, 22, 26, 0.14), 0 1px 2px rgba(20, 22, 26, 0.08);
+  --ws-radius: 10px;
+  --ws-radius-lg: 20px;
+  --ws-frame-bg: #b9cddd;
+  /* game HUD */
+  --cyan: #5b38f0;
+  --ink: #15171a;
+  --dim: #4a4f58;
+  --glass: rgba(255, 255, 255, 0.86);
+  --line: rgba(20, 22, 26, 0.12);
+}
+/* panels float as cards over the world instead of docking to the edges */
+:root[data-theme='floating'] .dc-panel { top: 12px; right: 12px; bottom: 12px; border: 0; border-radius: var(--ws-radius-lg); box-shadow: var(--ws-shadow); overflow: hidden; }
+:root[data-theme='floating'] .ws-top { top: 12px; left: 12px; right: 12px; border: 0; border-radius: 16px; box-shadow: var(--ws-shadow); }
+:root[data-theme='floating'] body.devchat-open .ws-top { right: calc(var(--ws-right-w) + 24px); }
+:root[data-theme='floating'] .ws-props { top: calc(var(--ws-bar-h) + 24px); left: 12px; bottom: 12px; border: 0; border-radius: var(--ws-radius-lg); box-shadow: var(--ws-shadow); overflow: hidden; }
+:root[data-theme='floating'] .props-collapsed .ws-props { transform: translateX(calc(-100% - 24px)); }
+:root[data-theme='floating'] .ws-rail { top: calc(var(--ws-bar-h) + 24px); border-radius: 50%; border: 0; }
+:root[data-theme='floating'] .ws-hint, :root[data-theme='floating'] .dc-feed, :root[data-theme='floating'] .ws-tag { border-radius: 99px; border: 0; box-shadow: var(--ws-shadow); }
+:root[data-theme='floating'] .ws-sheet, :root[data-theme='floating'] .ws-tips, :root[data-theme='floating'] .dc-quick { border-radius: var(--ws-radius-lg); border: 0; box-shadow: var(--ws-shadow); }
+:root[data-theme='floating'] .dc-tab { border-radius: 12px 12px 0 0; border: 0; box-shadow: var(--ws-shadow); }
+:root[data-theme='floating'] .ws-btn.sm, :root[data-theme='floating'] .dc-chip, :root[data-theme='floating'] .ws-seg, :root[data-theme='floating'] .ws-seg button,
+:root[data-theme='floating'] .ws-time, :root[data-theme='floating'] .ws-search { border-radius: 99px; }
+:root[data-theme='floating'] .dc-user, :root[data-theme='floating'] .dc-error, :root[data-theme='floating'] .dc-perm, :root[data-theme='floating'] .dc-cp,
+:root[data-theme='floating'] .dc-idea, :root[data-theme='floating'] .dc-menu, :root[data-theme='floating'] .dc-form textarea, :root[data-theme='floating'] .dc-working { border-radius: 14px; }
+:root[data-theme='floating'] .dc-user { border: 0; }
+:root[data-theme='floating'] .ws-time-icon[data-night='true'] { color: #5b38f0; }
+/* game HUD */
+:root[data-theme='floating'] #objective, :root[data-theme='floating'] #speedo, :root[data-theme='floating'] #flight, :root[data-theme='floating'] #prompt { border-radius: 16px; border: 0; box-shadow: var(--ws-shadow); }
+:root[data-theme='floating'] #objective .value { text-shadow: none; }
+:root[data-theme='floating'] .panel { color: #15171a; background: rgba(255, 255, 255, 0.95); border: 0; border-radius: 24px; box-shadow: var(--ws-shadow); }
+:root[data-theme='floating'] .panel h1 span { -webkit-text-stroke-color: #15171a; }
+:root[data-theme='floating'] .panel button { border-radius: 99px; box-shadow: none; }
+:root[data-theme='floating'] .panel button:not(.secondary) { color: #ffffff; }
+:root[data-theme='floating'] .panel button.secondary { color: #15171a; border-color: rgba(20, 22, 26, 0.22); }
+
+/* ======================= Blueprint ======================= */
+:root[data-theme='blueprint'] {
+  --ws-bg: #0e2c54;
+  --ws-page-bg: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 24px), repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 24px), #0e2c54;
+  --ws-surface: #0b2547;
+  --ws-card: rgba(255, 255, 255, 0.04);
+  --ws-panel: rgba(14, 44, 84, 0.97);
+  --ws-panel-2: rgba(255, 255, 255, 0.05);
+  --ws-panel-3: rgba(255, 255, 255, 0.1);
+  --ws-line: rgba(242, 246, 255, 0.32);
+  --ws-line-strong: rgba(242, 246, 255, 0.7);
+  --ws-ink: #f2f6ff;
+  --ws-dim: rgba(242, 246, 255, 0.78);
+  --ws-faint: rgba(242, 246, 255, 0.62);
+  --ws-accent: #ffd34d;
+  --ws-accent-ink: #0e2c54;
+  --ws-accent-hover: #ffe58e;
+  --ws-accent-soft: rgba(255, 211, 77, 0.14);
+  --ws-accent-line: rgba(255, 211, 77, 0.65);
+  --ws-select: #7fe0ff;
+  --ws-select-ink: #062033;
+  --ws-select-hover: #b0ecff;
+  --ws-select-soft: rgba(127, 224, 255, 0.14);
+  --ws-select-line: rgba(127, 224, 255, 0.65);
+  --ws-danger: #ff9c8a;
+  --ws-input-bg: rgba(0, 0, 0, 0.22);
+  --ws-font: 'IBM Plex Sans Condensed', system-ui, sans-serif;
+  --ws-display: 'IBM Plex Sans Condensed', system-ui, sans-serif;
+  --ws-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --ws-border-w: 1.5px;
+  --ws-frame-bg: #102f5a;
+  --cyan: #ffd34d;
+  --glass: rgba(14, 44, 84, 0.82);
+  --line: rgba(242, 246, 255, 0.4);
+}
+:root[data-theme='blueprint'] .dc-panel, :root[data-theme='blueprint'] .ws-props, :root[data-theme='blueprint'] .ws-top {
+  background-color: rgba(14, 44, 84, 0.97);
+  background-image: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 24px), repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 24px);
+}
+:root[data-theme='blueprint'] .dc-panel { border-left: 2px solid var(--ws-line-strong); }
+:root[data-theme='blueprint'] .ws-props { border-right: 2px solid var(--ws-line-strong); }
+:root[data-theme='blueprint'] .ws-top { border-bottom: 2px solid var(--ws-line-strong); }
+:root[data-theme='blueprint'] .dc-head-top h2, :root[data-theme='blueprint'] .ws-props-head h2, :root[data-theme='blueprint'] .ws-sel-title h3,
+:root[data-theme='blueprint'] .ws-proj, :root[data-theme='blueprint'] .ws-tw-head h3 { text-transform: uppercase; letter-spacing: 0.04em; }
+:root[data-theme='blueprint'] .ws-btn, :root[data-theme='blueprint'] .dc-tabs button, :root[data-theme='blueprint'] .dc-chip, :root[data-theme='blueprint'] .dc-keys,
+:root[data-theme='blueprint'] .ws-kbd, :root[data-theme='blueprint'] .dc-steps, :root[data-theme='blueprint'] .dc-note { font-family: var(--ws-mono); }
+:root[data-theme='blueprint'] .panel { background-color: rgba(14, 44, 84, 0.94); border: 2px solid rgba(242, 246, 255, 0.7); }
+:root[data-theme='blueprint'] .panel button:not(.secondary) { color: #0e2c54; }
+
+/* ======================= Terminal ======================= */
+:root[data-theme='terminal'] {
+  --ws-bg: #0a0c0a;
+  --ws-page-bg: #0a0c0a;
+  --ws-surface: #050605;
+  --ws-card: #0d110d;
+  --ws-panel: rgba(10, 12, 10, 0.97);
+  --ws-panel-2: rgba(200, 247, 197, 0.05);
+  --ws-panel-3: rgba(200, 247, 197, 0.1);
+  --ws-line: rgba(200, 247, 197, 0.28);
+  --ws-line-strong: rgba(200, 247, 197, 0.55);
+  --ws-ink: #c8f7c5;
+  --ws-dim: #8db58a;
+  --ws-faint: #7ba077;
+  --ws-accent: #c8f7c5;
+  --ws-accent-ink: #0a0c0a;
+  --ws-accent-hover: #e6ffe4;
+  --ws-accent-soft: rgba(200, 247, 197, 0.1);
+  --ws-accent-line: rgba(200, 247, 197, 0.5);
+  --ws-select: #ffb000;
+  --ws-select-ink: #0a0c0a;
+  --ws-select-hover: #ffc640;
+  --ws-select-soft: rgba(255, 176, 0, 0.12);
+  --ws-select-line: rgba(255, 176, 0, 0.6);
+  --ws-danger: #ff9c8a;
+  --ws-danger-ink: #0a0c0a;
+  --ws-input-bg: #050605;
+  --ws-font: 'JetBrains Mono', ui-monospace, monospace;
+  --ws-display: 'JetBrains Mono', ui-monospace, monospace;
+  --ws-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --ws-shadow: none;
+  --ws-frame-bg: #0d120d;
+  --cyan: #c8f7c5;
+  --ink: #c8f7c5;
+  --dim: #8db58a;
+  --glass: rgba(10, 12, 10, 0.85);
+  --line: rgba(200, 247, 197, 0.35);
+}
+:root[data-theme='terminal'] .dc-head-top h2::before { content: '> '; color: var(--ws-select); }
+:root[data-theme='terminal'] .dc-user { background: transparent; border: 0; border-left: 2px solid var(--ws-select); }
+:root[data-theme='terminal'] .dc-user::before { content: 'you› '; color: var(--ws-select); }
+:root[data-theme='terminal'] .ws-btn, :root[data-theme='terminal'] .dc-tabs button { text-transform: lowercase; }
+:root[data-theme='terminal'] #objective .value, :root[data-theme='terminal'] #speedo, :root[data-theme='terminal'] .panel h1 { text-shadow: 0 0 12px rgba(200, 247, 197, 0.35); }
+:root[data-theme='terminal'] .panel { background: rgba(10, 12, 10, 0.94); border: 1px solid rgba(200, 247, 197, 0.5); }
+:root[data-theme='terminal'] .panel button:not(.secondary) { color: #0a0c0a; }
+
+/* ======================= Arcade ======================= */
+:root[data-theme='arcade'] {
+  --ws-bg: #1b0f3b;
+  --ws-page-bg: #1b0f3b;
+  --ws-surface: #2a1a5e;
+  --ws-card: #2a1a5e;
+  --ws-panel: rgba(27, 15, 59, 0.97);
+  --ws-panel-2: rgba(255, 255, 255, 0.06);
+  --ws-panel-3: rgba(255, 255, 255, 0.12);
+  --ws-line: #4c3ca8;
+  --ws-line-strong: #8b7cff;
+  --ws-ink: #ffffff;
+  --ws-dim: #e6dcff;
+  --ws-faint: #c4b6ff;
+  --ws-accent: #ffe14d;
+  --ws-accent-ink: #1b0f3b;
+  --ws-accent-hover: #fff08f;
+  --ws-accent-soft: rgba(255, 225, 77, 0.14);
+  --ws-accent-line: #ffe14d;
+  --ws-select: #4dffb8;
+  --ws-select-ink: #1b0f3b;
+  --ws-select-hover: #8affd2;
+  --ws-select-soft: rgba(77, 255, 184, 0.14);
+  --ws-select-line: #4dffb8;
+  --ws-danger: #ff7a9c;
+  --ws-danger-ink: #1b0f3b;
+  --ws-danger-text: #ffd0dc;
+  --ws-input-bg: #12092b;
+  --ws-font: 'Space Mono', ui-monospace, monospace;
+  --ws-display: 'Press Start 2P', ui-monospace, monospace;
+  --ws-mono: 'Space Mono', ui-monospace, monospace;
+  --ws-shadow: 6px 6px 0 #ff4fd8;
+  --ws-border-w: 3px;
+  --ws-frame-bg: #3b2a86;
+  --cyan: #ffe14d;
+  --dim: #e6dcff;
+  --glass: rgba(27, 15, 59, 0.9);
+  --line: #6b5cd6;
+}
+:root[data-theme='arcade'] .dc-panel { border-left: 3px solid var(--ws-accent); }
+:root[data-theme='arcade'] .ws-props { border-right: 3px solid var(--ws-line-strong); }
+:root[data-theme='arcade'] .ws-top { border-bottom: 3px solid var(--ws-line-strong); }
+:root[data-theme='arcade'] .dc-head-top h2, :root[data-theme='arcade'] .ws-props-head h2, :root[data-theme='arcade'] .ws-proj,
+:root[data-theme='arcade'] .ws-tw-head h3, :root[data-theme='arcade'] .ws-sel-title h3, :root[data-theme='arcade'] .dc-hist-title,
+:root[data-theme='arcade'] .dc-tabs button, :root[data-theme='arcade'] .ws-seg button { font-family: var(--ws-display); font-size: 10.5px; line-height: 1.6; letter-spacing: 0; }
+:root[data-theme='arcade'] .ws-sel-title h3 { font-size: 12px; }
+:root[data-theme='arcade'] .dc-user { background: var(--ws-select); color: var(--ws-select-ink); border: 0; }
+:root[data-theme='arcade'] .dc-user .dc-with { color: #2a1a5e; }
+:root[data-theme='arcade'] .dc-bot:not(.dc-progress) { padding: 10px 12px; background: var(--ws-surface); border-left: 4px solid #ff4fd8; }
+:root[data-theme='arcade'] .ws-sheet, :root[data-theme='arcade'] .ws-tips, :root[data-theme='arcade'] .dc-menu { border: 3px solid var(--ws-accent); }
+:root[data-theme='arcade'] .panel { background: rgba(27, 15, 59, 0.95); border: 4px solid #ffe14d; box-shadow: 8px 8px 0 #ff4fd8; }
+:root[data-theme='arcade'] .panel h1 { font-family: 'Press Start 2P', monospace; font-size: 34px; line-height: 1.3; color: #ffe14d; }
+:root[data-theme='arcade'] .panel h1 span { -webkit-text-stroke: 0; color: #ff4fd8; letter-spacing: 0; }
+:root[data-theme='arcade'] .panel button:not(.secondary) { font-family: 'Press Start 2P', monospace; font-size: 13px; color: #1b0f3b; }
+
+/* ======================= Atlas ======================= */
+:root[data-theme='atlas'] {
+  --ws-bg: #dde4d3;
+  --ws-page-bg: #dde4d3;
+  --ws-surface: #f1f4ec;
+  --ws-card: #f1f4ec;
+  --ws-panel: rgba(241, 244, 236, 0.97);
+  --ws-panel-2: rgba(31, 42, 29, 0.05);
+  --ws-panel-3: rgba(31, 42, 29, 0.09);
+  --ws-line: rgba(31, 42, 29, 0.18);
+  --ws-line-strong: rgba(31, 42, 29, 0.5);
+  --ws-ink: #1f2a1d;
+  --ws-dim: #3c4a39;
+  --ws-faint: #56654f;
+  --ws-accent: #0f5e66;
+  --ws-accent-ink: #ffffff;
+  --ws-accent-hover: #0a4a51;
+  --ws-accent-soft: rgba(15, 94, 102, 0.1);
+  --ws-accent-line: rgba(15, 94, 102, 0.5);
+  --ws-select: #b7791f;
+  --ws-select-ink: #ffffff;
+  --ws-select-hover: #9c6618;
+  --ws-select-soft: rgba(183, 121, 31, 0.12);
+  --ws-select-line: rgba(183, 121, 31, 0.6);
+  --ws-danger: #b3261e;
+  --ws-danger-ink: #ffffff;
+  --ws-danger-text: #8c1d17;
+  --ws-danger-soft: rgba(179, 38, 30, 0.08);
+  --ws-danger-line: rgba(179, 38, 30, 0.45);
+  --ws-input-bg: #ffffff;
+  --ws-font: 'Bricolage Grotesque', system-ui, sans-serif;
+  --ws-display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --ws-mono: 'DM Mono', ui-monospace, monospace;
+  --ws-shadow: 0 10px 30px rgba(31, 42, 29, 0.18);
+  --ws-radius: 10px;
+  --ws-radius-lg: 18px;
+  --ws-border-w: 1.5px;
+  --ws-frame-bg: #aac3cf;
+  --cyan: #0f5e66;
+  --ink: #1f2a1d;
+  --dim: #3c4a39;
+  --glass: rgba(241, 244, 236, 0.9);
+  --line: rgba(31, 42, 29, 0.3);
+}
+:root[data-theme='atlas'] .dc-panel { top: 12px; right: 12px; bottom: 12px; border: 1.5px solid var(--ws-ink); border-radius: var(--ws-radius-lg); overflow: hidden; }
+:root[data-theme='atlas'] body.devchat-open .ws-top { right: calc(var(--ws-right-w) + 24px); }
+:root[data-theme='atlas'] .ws-props { border-right: 1.5px solid var(--ws-ink); }
+:root[data-theme='atlas'] .ws-top { border-bottom: 1.5px solid var(--ws-ink); }
+:root[data-theme='atlas'] .ws-hint, :root[data-theme='atlas'] .ws-tag, :root[data-theme='atlas'] .dc-feed, :root[data-theme='atlas'] .dc-chip,
+:root[data-theme='atlas'] .ws-seg, :root[data-theme='atlas'] .ws-seg button, :root[data-theme='atlas'] .ws-btn.sm { border-radius: 99px; }
+:root[data-theme='atlas'] .dc-user, :root[data-theme='atlas'] .dc-error, :root[data-theme='atlas'] .dc-perm, :root[data-theme='atlas'] .dc-cp, :root[data-theme='atlas'] .dc-idea,
+:root[data-theme='atlas'] .ws-sheet, :root[data-theme='atlas'] .ws-tips, :root[data-theme='atlas'] .dc-quick, :root[data-theme='atlas'] .dc-form textarea { border-radius: 12px; }
+:root[data-theme='atlas'] .dc-head-top h2, :root[data-theme='atlas'] .ws-proj, :root[data-theme='atlas'] .ws-sel-title h3 { font-weight: 800; letter-spacing: -0.01em; }
+:root[data-theme='atlas'] .ws-time-icon[data-night='true'] { color: #0f5e66; }
+:root[data-theme='atlas'] #objective, :root[data-theme='atlas'] #speedo, :root[data-theme='atlas'] #flight, :root[data-theme='atlas'] #prompt { border-radius: 14px; border: 1.5px solid #1f2a1d; }
+:root[data-theme='atlas'] #objective .value { text-shadow: none; }
+:root[data-theme='atlas'] .panel { color: #1f2a1d; background: rgba(241, 244, 236, 0.95); border: 1.5px solid #1f2a1d; border-radius: 22px; }
+:root[data-theme='atlas'] .panel h1 span { -webkit-text-stroke-color: #1f2a1d; }
+:root[data-theme='atlas'] .panel button { border-radius: 12px; box-shadow: none; }
+:root[data-theme='atlas'] .panel button:not(.secondary) { color: #ffffff; }
+:root[data-theme='atlas'] .panel button.secondary { color: #1f2a1d; border-color: #1f2a1d; }
+
+/* every theme: its font on the game page too (engine/ui/style.css sets Chakra Petch) */
+:root[data-theme], :root[data-theme] body { font-family: var(--ws-font); }

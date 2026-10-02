@@ -1,5 +1,22 @@
-/* World Studio UI tokens, shared by build mode (engine/build) and the Claude panel (harness/client). */
+/* World Studio UI tokens, shared by the studio (apps/studio), build mode's label (engine/build) and
+   the game's HUD. These are the Control Room theme; the other themes override them by
+   :root[data-theme] in packages/theme/src/themes.css. */
 :root {
+  --ws-bg: #070b12;
+  --ws-page-bg: radial-gradient(1200px 600px at 80% -10%, rgba(60, 242, 255, 0.09), transparent 60%), radial-gradient(900px 500px at -10% 110%, rgba(255, 210, 74, 0.05), transparent 60%), #070b12;
+  --ws-surface: #0b111b;
+  --ws-card: rgba(255, 255, 255, 0.035);
+  --ws-input-bg: rgba(0, 0, 0, 0.35);
+  --ws-accent-hover: #7ff6ff;
+  --ws-select-ink: #1b1402;
+  --ws-select-hover: #ffe07e;
+  --ws-danger-ink: #1a0805;
+  --ws-danger-text: #ffd6cf;
+  --ws-display: 'Chakra Petch', system-ui, sans-serif;
+  --ws-radius: 0px;
+  --ws-radius-lg: 0px;
+  --ws-border-w: 1px;
+  --ws-frame-bg: #05080d;
   --ws-panel: rgba(9, 14, 22, 0.94);
   --ws-panel-2: rgba(255, 255, 255, 0.045);
   --ws-panel-3: rgba(255, 255, 255, 0.08);
@@ -32,7 +49,7 @@
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   width: auto; margin: 0; padding: 0 12px; height: 32px;
   font-family: var(--ws-font); font-size: 13px; font-weight: 600; letter-spacing: 0.01em; text-transform: none; white-space: nowrap;
-  color: var(--ws-ink); background: transparent; border: 1px solid var(--ws-line-strong); border-radius: 0;
+  color: var(--ws-ink); background: transparent; border: var(--ws-border-w) solid var(--ws-line-strong); border-radius: var(--ws-radius);
   box-shadow: none; cursor: pointer; transition: background 0.15s var(--ws-ease), border-color 0.15s var(--ws-ease), color 0.15s;
 }
 .ws-btn:hover:not(:disabled) { background: var(--ws-panel-3); border-color: rgba(255, 255, 255, 0.36); box-shadow: none; }
@@ -40,17 +57,17 @@
 .ws-btn:disabled { opacity: 0.45; cursor: default; }
 .ws-btn:focus-visible, .ws-icon:focus-visible, .ws-seg button:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 2px; }
 .ws-btn.primary { color: var(--ws-accent-ink); background: var(--ws-accent); border-color: var(--ws-accent); }
-.ws-btn.primary:hover:not(:disabled) { background: #7ff6ff; border-color: #7ff6ff; }
-.ws-btn.select { color: #1b1402; background: var(--ws-select); border-color: var(--ws-select); }
-.ws-btn.select:hover:not(:disabled) { background: #ffe07e; border-color: #ffe07e; }
-.ws-btn.danger { color: #1a0805; background: var(--ws-danger); border-color: var(--ws-danger); }
+.ws-btn.primary:hover:not(:disabled) { background: var(--ws-accent-hover); border-color: var(--ws-accent-hover); }
+.ws-btn.select { color: var(--ws-select-ink); background: var(--ws-select); border-color: var(--ws-select); }
+.ws-btn.select:hover:not(:disabled) { background: var(--ws-select-hover); border-color: var(--ws-select-hover); }
+.ws-btn.danger { color: var(--ws-danger-ink); background: var(--ws-danger); border-color: var(--ws-danger); }
 .ws-btn.quiet { border-color: transparent; color: var(--ws-dim); }
 .ws-btn.quiet:hover:not(:disabled) { color: var(--ws-ink); }
 .ws-btn.sm { height: 28px; padding: 0 9px; font-size: 12.5px; }
 .ws-btn svg, .ws-icon svg { width: 16px; height: 16px; flex: none; }
 .ws-icon {
   display: inline-grid; place-items: center; width: 32px; height: 32px; margin: 0; padding: 0;
-  color: var(--ws-dim); background: transparent; border: 1px solid transparent; border-radius: 0; box-shadow: none; cursor: pointer;
+  color: var(--ws-dim); background: transparent; border: 1px solid transparent; border-radius: var(--ws-radius); box-shadow: none; cursor: pointer;
 }
 .ws-icon:hover { color: var(--ws-ink); background: var(--ws-panel-3); box-shadow: none; }
 .ws-kbd {

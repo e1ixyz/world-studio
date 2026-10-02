@@ -11,7 +11,7 @@ export function DialogContent({ className, children, ...props }: React.Component
       <D.Overlay className="fixed inset-0 z-10 bg-[rgba(3,6,12,0.72)] backdrop-blur-[6px]" />
       <D.Content
         className={cn(
-          'fixed left-1/2 top-1/2 z-10 max-h-[calc(100vh-32px)] w-[min(620px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto border border-line bg-surface p-7 shadow-dialog focus:outline-none',
+          'fixed left-1/2 top-1/2 z-10 max-h-[calc(100vh-32px)] w-[min(620px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-ws-lg border border-line bg-surface p-7 text-ink shadow-dialog focus:outline-none',
           className,
         )}
         {...props}
@@ -23,7 +23,7 @@ export function DialogContent({ className, children, ...props }: React.Component
 }
 
 export function DialogTitle({ className, ...props }: React.ComponentProps<typeof D.Title>) {
-  return <D.Title className={cn('text-[26px] font-bold', className)} {...props} />;
+  return <D.Title className={cn('font-display text-[26px] font-bold', className)} {...props} />;
 }
 
 export function DialogDescription({ className, ...props }: React.ComponentProps<typeof D.Description>) {

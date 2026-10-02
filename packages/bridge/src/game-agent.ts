@@ -5,6 +5,8 @@
 // what has to stay in this document: the quick prompt bar (so Enter keeps pointer lock), key
 // shortcuts while the game has focus, and error capture.
 import '../../../engine/ui/tokens.css';
+import '@ws/theme/themes.css';
+import { applyTheme, rememberedTheme } from '@ws/theme';
 import './game.css';
 import { type GameMessageBody, listen, send, StudioMessage } from './protocol.ts';
 
@@ -39,6 +41,7 @@ const post = (msg: GameMessageBody) => send(window.parent, msg, ORIGIN);
 
 if (embedded) {
   let panelOpen = false;
+  applyTheme(rememberedTheme()); // paint in the last theme until the studio says otherwise
 
   // Errors since this page loaded, for the agent's game_state.
   const errors: string[] = [];
@@ -95,6 +98,9 @@ if (embedded) {
         break;
       case 'exitPointerLock':
         document.exitPointerLock?.();
+        break;
+      case 'theme':
+        applyTheme(m.theme);
         break;
       case 'buildAction': {
         const g = w.__game;

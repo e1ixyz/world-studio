@@ -156,7 +156,7 @@ The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Eve
 engine/      shared runtime every game runs on
 games/       one folder per project (games/<slug>/)
 templates/   starting points copied into games/<slug>/ on create
-packages/    server (studio daemon, API, domain), shared (zod schemas), bridge (studio <-> game frame), db (Drizzle schema, PGlite)
+packages/    server (studio daemon, API, domain), shared (zod schemas), bridge (studio <-> game frame), db (Drizzle schema, PGlite), theme (the six studio themes)
 apps/studio/ React studio UI: landing page, project shell, Ask panel
 apps/desktop/ Electron shell for the macOS app
 test/unit/   Vitest unit tests;  e2e/  Playwright suite (web + Electron)
@@ -209,7 +209,7 @@ Templates are copied, never linked. See Gotchas.
 
 ### `.harness/`
 
-- `settings.json` - studio-wide settings, currently only `alwaysEngine`. Both the browser dev server and the desktop app read it fresh on every prompt.
+- `settings.json` - studio-wide settings: `alwaysEngine` and `theme`. Both the browser dev server and the desktop app read it fresh on every prompt.
 - `db/` - the studio database (PGlite): conversations, chat items, runs. See Database.
 - `projects/<slug>/chat.json` - the chat logs from before the database, imported into it once and kept as a backup.
 - `git/<slug>.git`, `git/engine.git` - checkpoint history (see Checkpoints).
@@ -406,6 +406,24 @@ React 19 with TanStack Router (file-based routes in `src/routes/`; `routeTree.ge
 - In production there's no New project button and no card actions. The list comes from `src/lib/registry.prod.js`, the glob of every `game.json`. A card opens `play.html?game=<slug>`.
 - The React and Tailwind plugins live in `vite.config.js` and are scoped to `apps/studio/src`. Games and the engine stay plain JS, with the harness's own reload handling.
 - `bun run typecheck` checks the studio too (`apps/studio/tsconfig.json`).
+
+## Themes: `packages/theme/`
+
+The studio has six themes: Control Room (the default and original), Floating Canvas, Blueprint, Terminal, Arcade and Atlas. They come from the design canvas made on 2026-10-02 (directions 01, 10, 02, 04, 05, 07). Pick one in Settings: the landing page's Settings button, or "Theme and settings…" in the Ask panel's ⋯ menu.
+
+- `themes.ts` holds `THEMES` (id, name, blurb, picker swatches, Google Fonts families), `applyTheme(id)` and `rememberedTheme()`.
+  - `applyTheme(id)` sets `<html data-theme>`, adds the theme's font `<link>` once, and remembers the theme in localStorage (`worldstudio:theme`), so the next load paints in it before settings arrive.
+- `themes.css` overrides, per theme, the `--ws-*` variables from `engine/ui/tokens.css` (Control Room's values) and the game HUD's own variables (`--cyan`, `--ink`, `--dim`, `--glass`, `--line` in `engine/ui/style.css`), plus a few structural rules:
+  - Floating Canvas and Atlas inset the Ask panel and round the panels. Floating Canvas also detaches the top bar and Properties panel as floating cards.
+  - Blueprint puts a grid on the panels; Arcade uses pixel headings and offset shadows; Terminal styles the chat as a prompt.
+  - The start menu panel is restyled per theme too.
+- The choice is the `theme` studio setting in `.harness/settings.json`, so the browser and the desktop app share it.
+  - `Settings` in `packages/shared` validates it; an unknown value falls back to `control-room`, and `POST /settings` refuses one with a 400.
+  - The settings event refetches it live everywhere.
+  - `useTheme()` (`apps/studio/src/lib/theme.ts`, mounted in the root route) applies it. The project shell also sends it to the game frame (bridge message `theme`), where the bridge agent applies it, so the HUD, the selection label and the quick bar match.
+- Tailwind's colors, fonts and radii in `apps/studio/src/styles.css` are `@theme inline` references to those variables, so the landing page follows a switch without any per-theme classes.
+- Production builds and exports have no settings, so they use the remembered theme or the default.
+- A new theme needs an entry in `THEMES` and a block in `themes.css`, and should then be checked on the landing page, the studio and the start menu. The swatches and fonts in `THEMES` must match the CSS.
 
 ## Build mode: `engine/build/buildmode.js` (in-world) and `apps/studio/src/build/` (panels)
 

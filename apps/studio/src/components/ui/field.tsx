@@ -2,7 +2,7 @@ import type * as React from 'react';
 import { cn } from '../../lib/utils.ts';
 
 const control =
-  'w-full border border-line bg-black/35 px-3 py-[11px] text-[15px] text-ink outline-none placeholder:text-dim/70 focus:border-accent/55';
+  'w-full rounded-ws border border-line bg-field px-3 py-[11px] text-[15px] text-ink outline-none placeholder:text-dim/70 focus:border-accent/55';
 
 export function Field({ label, className, children, ...props }: React.ComponentProps<'label'> & { label: string }) {
   return (

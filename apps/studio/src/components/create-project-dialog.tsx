@@ -48,7 +48,7 @@ export function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onO
                   role="radio"
                   aria-checked={t.id === chosen}
                   onClick={() => setTemplate(t.id)}
-                  className={cn('flex flex-col gap-1 border border-line bg-white/[0.03] p-3 text-left text-ink', t.id === chosen && 'border-accent bg-accent/[0.08]')}
+                  className={cn('flex flex-col gap-1 rounded-ws border border-line bg-card p-3 text-left text-ink', t.id === chosen && 'border-accent bg-accent/[0.08]')}
                 >
                   <b className="text-[15px]">{t.name}</b>
                   <small className="text-[12.5px] leading-[1.4] text-dim">{t.description}</small>

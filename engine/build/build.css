@@ -10,10 +10,10 @@ body.build-mode #hint, body.build-mode #fps, body.build-mode #minimap, body.buil
 /* ---------- in-world selection label ---------- */
 .ws-tag {
   position: fixed; z-index: 29; left: 0; top: 0; display: none; align-items: center; gap: 8px; padding: 4px 4px 4px 10px;
-  font-size: 13px; font-weight: 600; color: #1b1402; background: rgba(255, 210, 74, 0.95); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  font-size: 13px; font-weight: 600; color: var(--ws-select-ink); background: var(--ws-select); border-radius: var(--ws-radius); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   pointer-events: auto; white-space: nowrap;
 }
 .ws-tag.show { display: flex; }
 .ws-tag.offscreen { visibility: hidden; }
-.ws-tag .ws-btn { height: 24px; padding: 0 8px; font-size: 12px; color: var(--ws-select); background: #1b1402; border-color: #1b1402; }
-.ws-tag .ws-btn:hover { background: #33260a; border-color: #33260a; }
+.ws-tag .ws-btn { height: 24px; padding: 0 8px; font-size: 12px; color: var(--ws-select); background: var(--ws-select-ink); border-color: var(--ws-select-ink); }
+.ws-tag .ws-btn:hover { opacity: 0.85; }
