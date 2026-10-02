@@ -2,7 +2,8 @@
 // project at a time. Every prompt is checkpointed first, and edits are limited to the game's
 // folder (plus engine/ when allowed).
 import type { ChatItem, ChatItemKind, ChatState } from '@ws/shared';
-import type { AgentRunner, RunHandle } from './agent/runner.ts';
+import { type AgentRunner, type RunHandle, STUDIO_TOOL_PREFIX, type StudioTool } from './agent/runner.ts';
+import { type CheckResult, diagKey, formatCheck } from './check-game.ts';
 import type { ChatRepository } from './chat-store.ts';
 import type { CheckpointStore } from './checkpoints/store.ts';
 import type { StudioEvents } from './events.ts';
@@ -53,6 +54,10 @@ export function describeTool(p: StudioPaths, name: string, input: Record<string,
       return `Run ${input.command}`;
     case 'TodoWrite':
       return 'Plan steps';
+    case 'ToolSearch':
+      return 'Load tools';
+    case `${STUDIO_TOOL_PREFIX}check_game`:
+      return 'Check the game for errors';
     default:
       return name;
   }
@@ -66,6 +71,8 @@ export interface ChatDeps {
   projects: Projects;
   settings: SettingsStore;
   events: StudioEvents;
+  // Fast type/syntax check of a game, offered to the agent as check_game when the runner hosts tools.
+  checkGame?(slug: string, baseline?: Set<string>): Promise<CheckResult>;
   // Told when a job ends, so pending reloads can flush.
   onJobEnd(slug: string): void;
   // Restores wrote files the watcher will report; reloads are sent by the chat itself.
@@ -154,6 +161,8 @@ export class ChatService {
     const allow = (dir: string) => [`Edit(/${dir}/**)`, `Write(/${dir}/**)`];
     const tools = [...BASE_TOOLS, ...allow(gameDir(paths, slug))];
     if (engine) tools.push(...allow(paths.engine));
+    const studioTools = this.studioTools(slug);
+    tools.push(...studioTools.map((t) => STUDIO_TOOL_PREFIX + t.name));
     const job: Job = { handle: { stop() {} }, startedAt: Date.now(), engine, checkpoint };
     c.job = job;
     job.handle = this.d.runner.start(
@@ -161,7 +170,8 @@ export class ChatService {
         prompt,
         cwd: paths.root,
         allowedTools: tools,
-        appendSystemPrompt: systemPrompt(slug, meta, engine),
+        tools: studioTools,
+        appendSystemPrompt: systemPrompt(slug, meta, engine, { checkTool: studioTools.some((t) => t.name === 'check_game') }),
         resume: c.sessionId,
         model: process.env.DEVCHAT_MODEL,
         // WORLD_STUDIO_AGENT lets user-level hooks (e.g. a handoff Stop hook) skip these short in-game runs
@@ -207,6 +217,27 @@ export class ChatService {
       },
     );
     this.broadcastState(c);
+  }
+
+  private studioTools(slug: string): StudioTool[] {
+    const check = this.d.checkGame;
+    if (!this.d.runner.hostsTools || !check) return [];
+    // Errors the game already has, taken before the agent edits anything.
+    const baseline = check(slug).then(
+      (r) => new Set(r.errors.map(diagKey)),
+      () => undefined,
+    );
+    return [
+      {
+        name: 'check_game',
+        description: `Type- and syntax-check this game (games/${slug}/) against the engine contract in about a second. Reports only errors introduced since this prompt started. Call it after editing.`,
+        input: {},
+        run: async () => {
+          const b = await baseline;
+          return formatCheck(await check(slug, b), !!b);
+        },
+      },
+    ];
   }
 
   stop(slug: string) {

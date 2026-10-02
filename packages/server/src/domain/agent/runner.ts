@@ -1,5 +1,6 @@
-// How the harness runs a coding agent on one prompt. CliRunner spawns the `claude` CLI; later
-// runners (the Agent SDK) implement the same interface.
+// How the harness runs a coding agent on one prompt. SdkRunner drives Claude Code through the
+// Agent SDK (the default); CliRunner spawns the `claude` CLI with stream-json output.
+import type { z } from 'zod';
 
 export interface PermissionDenial {
   tool_name: string;
@@ -15,10 +16,22 @@ export interface RunResult {
   denials: PermissionDenial[];
 }
 
+// A tool the studio offers the agent in-process (exposed as mcp__studio__<name>). Runners that
+// can't host tools (the CLI) leave them out.
+export interface StudioTool {
+  name: string;
+  description: string;
+  input: z.ZodRawShape;
+  run(args: Record<string, unknown>): Promise<string>;
+}
+
+export const STUDIO_TOOL_PREFIX = 'mcp__studio__';
+
 export interface RunRequest {
   prompt: string;
   cwd: string;
   allowedTools: string[];
+  tools?: StudioTool[];
   appendSystemPrompt: string;
   resume?: string | null;
   model?: string;
@@ -39,5 +52,7 @@ export interface RunHandle {
 }
 
 export interface AgentRunner {
+  // Whether `tools` reach the agent.
+  readonly hostsTools: boolean;
   start(req: RunRequest, on: RunEvents): RunHandle;
 }

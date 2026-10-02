@@ -86,6 +86,19 @@ export class Environment {
     this.envTimer = 1e9;
   }
 
+  // Sky look, without reaching into the Sky shader's uniforms: { turbidity, rayleigh, mie, glare }
+  // (mie = mieCoefficient, glare = mieDirectionalG, 0..1). Values left out stay as they are. The
+  // lighting environment map is rebuilt on the next frame so reflections match.
+  /** @param {{ turbidity?: number, rayleigh?: number, mie?: number, glare?: number }} [sky] */
+  setSky({ turbidity, rayleigh, mie, glare } = {}) {
+    const u = this.sky.material.uniforms;
+    if (turbidity != null) u.turbidity.value = turbidity;
+    if (rayleigh != null) u.rayleigh.value = rayleigh;
+    if (mie != null) u.mieCoefficient.value = mie;
+    if (glare != null) u.mieDirectionalG.value = glare;
+    this.envTimer = 1e9;
+  }
+
   update(dt, focus, camera, timeScale = 1) {
     const hoursPerSec = 24 / this.dayLength;
     this.time = (this.time + dt * hoursPerSec * timeScale) % 24;

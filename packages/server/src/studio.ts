@@ -3,6 +3,8 @@
 import fs from 'node:fs';
 import type { AgentRunner } from './domain/agent/runner.ts';
 import { CliRunner } from './domain/agent/cli-runner.ts';
+import { SdkRunner } from './domain/agent/sdk-runner.ts';
+import { checkGame } from './domain/check-game.ts';
 import { ChatService } from './domain/chat.ts';
 import { JsonChatRepository } from './domain/chat-store.ts';
 import { FsCheckpointStore } from './domain/checkpoints/fs.ts';
@@ -22,7 +24,14 @@ export interface StudioOptions {
 
 export type Studio = ReturnType<typeof createStudio>;
 
-export function createStudio({ root, runner = new CliRunner(), checkpoints }: StudioOptions) {
+// DEVCHAT_RUNNER=sdk|cli picks the runner. Default: the Agent SDK, unless DEVCHAT_CLAUDE points at
+// another binary (tests use scripts/fake-claude.mjs, which only speaks the CLI's stream-json).
+export function defaultRunner(env = process.env): AgentRunner {
+  const choice = env.DEVCHAT_RUNNER || (env.DEVCHAT_CLAUDE ? 'cli' : 'sdk');
+  return choice === 'cli' ? new CliRunner() : new SdkRunner();
+}
+
+export function createStudio({ root, runner = defaultRunner(), checkpoints }: StudioOptions) {
   const paths = studioPaths(root);
   const events = new StudioEvents();
   const settings = new SettingsStore(paths, events);
@@ -60,6 +69,7 @@ export function createStudio({ root, runner = new CliRunner(), checkpoints }: St
     projects,
     settings,
     events,
+    checkGame: (slug, baseline) => checkGame(paths, slug, baseline),
     onJobEnd: (slug) => reloads.jobEnded(slug),
     onRestore: (slug, engine) => {
       reloads.suppress(2500);

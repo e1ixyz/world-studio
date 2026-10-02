@@ -34,7 +34,7 @@ export default defineGame({
 | field | what it is |
 |---|---|
 | `scene`, `camera`, `renderer` | Three.js objects. Add meshes to `scene`. Don't move `camera` yourself; the player and build mode own it. |
-| `env` | Sky, sun and moon, fog, day/night (`engine/world/environment.js`). `env.time` is hours 0–24, `env.dayLength` is seconds per day, `env.night` is 0–1, and `env.light` is the shadow-casting sun. |
+| `env` | Sky, sun and moon, fog, day/night (`engine/world/environment.js`). `env.time` is hours 0–24, `env.dayLength` is seconds per day, `env.night` is 0–1, and `env.light` is the shadow-casting sun. `env.setSky({ turbidity, rayleigh, mie, glare })` changes the sky's look (haze, blue, sun-halo strength and tightness); use it rather than the Sky shader's uniforms. |
 | `textures` | Base canvas textures: `pool` (soft radial glow), `beam` (vertical fade), `waterNormal`, `grid` (ground grid). Helpers for making your own are in `engine/world/textures.js` (`mk`, `toTex`, `grain`, `blotches`, `radial`). |
 | `hud` | `toast(html)`, `setObjective({ label, value, total, sub })`, `setMap({ image, half, markers })`, `modal({ kicker, title, html, button, onClose })`, `hint(text)`. |
 | `audio` | `pickup()`, `win()`, `horn()`, `crash(v)`, `step()`, `door()`, `tone(freq, start, dur, vol, type)`, `noise(dur, freq, type, vol)`. |
@@ -103,6 +103,10 @@ ctx.select.addProvider(() => enemies.map((e) => ({ kind: 'enemy', id: e.id, prop
 - `textures.*`: the canvas texture helpers.
 
 For performance, prefer `InstancedMesh` for many copies of the same thing, merged geometry for static structures, and canvas textures over image files (games ship no asset files).
+
+## Types
+
+`engine/types.d.ts` types the contract (`GameContext`, `SetupResult`, `World`, `TweakDef`, `SelectEntry`), and `engine/index.d.ts` types `defineGame`, so editors and the studio's `check_game` tool check games written in plain JavaScript. If you change what the engine passes to or expects from games, update these files too.
 
 ## Rules of the road
 

@@ -117,12 +117,12 @@ One Node process per checkout owns the harness: chats, agent jobs, checkpoints a
 
 The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Every phase keeps the three games and both surfaces working.
 
-- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`), P4 (git checkpoints with diffs).
+- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`), P4 (git checkpoints with diffs), P5 (Agent SDK runner, engine types, `check_game`, `env.setSky()`).
 - Next:
-  - P5: Agent SDK runner behind an `AgentRunner` interface, plus engine `.d.ts` types and a `check_game` tool.
   - P6: React studio shell (TanStack Router and Query, shadcn, Tailwind v4) with the game in an iframe and a typed postMessage bridge.
   - P7: build panels in React, live-game MCP tools and permission prompts.
   - P8: PGlite + Drizzle database and the play-only export.
+- Open follow-up: `games/meridian-city/game.js` still sets the Sky shader's uniforms directly for its Sky tweaks. That code is in uncommitted work on the game, so it was left alone; switch it to `ctx.env.setSky()`.
 - `engine/` stays at the repo root on purpose: games import it by relative path, and the agent's edit rules and old checkpoints use that path.
 
 ## Layout
@@ -148,6 +148,7 @@ CLAUDE.md    project instructions for Claude: run the parity skill before finish
 - `runtime.js` - the `play.html` entry. Loads `games/<slug>/game.js`, builds the context, calls the game's `setup(ctx)`, adds the engine's own tweaks, runs Play and Build modes, the main loop, screenshots and thumbnails, and the hot-reload snapshot.
 - `index.js` - public exports for games, including `defineGame` (`engine/index.js:10`).
 - `API.md` - the game contract. Treat it as authoritative. Claude is told to read it before its first change in a conversation.
+- `types.d.ts`, `index.d.ts` - types for the contract (`GameContext`, `SetupResult`, `TweakDef`, `SelectEntry`, `defineGame`). The engine's own classes are typed from their JS and JSDoc. `check_game` and editors use them.
 - `registry.prod.js` - production-only `import.meta.glob` of every game's `game.js`, `game.json` and `tweaks.json`. See Gotchas for why it's a separate file.
 - `core/app.js` - `createApp`: renderer, scene, camera, bloom, the High/Low quality switch (`applyQuality`, `engine/core/app.js:33`) and frame capture for screenshots.
 - `core/input.js` - keyboard state shared by play and build mode. It ignores keys typed into text fields.
@@ -251,7 +252,16 @@ Request bodies are checked against the zod schemas in `packages/shared/src/schem
 
 ### Claude runs
 
-`ChatService.prompt()` checkpoints, logs the prompt and starts the runner. `CliRunner` (`domain/agent/cli-runner.ts`) spawns the CLI headless in the project root:
+`ChatService.prompt()` checkpoints, logs the prompt and starts an `AgentRunner` (`domain/agent/`). There are two:
+
+- `SdkRunner` (the default) drives Claude Code through `@anthropic-ai/claude-agent-sdk`.
+  - It uses the `claude` binary found on PATH (`pathToClaudeCodeExecutable`), so runs use the user's own login and version. Checked 2026-10-02: no API key involved, it reports the Claude Team subscription.
+  - It loads every settings source, as the CLI does, so the user's global hooks still apply.
+  - It hosts studio tools in-process as `mcp__studio__*`, and Stop goes through an `AbortController`.
+- `CliRunner` spawns the CLI with stream-json.
+- `DEVCHAT_RUNNER=sdk|cli` picks one. With `DEVCHAT_CLAUDE` set (the tests' fake agent), the default is `cli`.
+
+Both get the same tool rules. The CLI form is:
 
 ```
 claude -p <prompt> --output-format stream-json --verbose --permission-mode default
@@ -264,7 +274,12 @@ claude -p <prompt> --output-format stream-json --verbose --permission-mode defau
 - `systemPrompt()` names the game folder, says whether engine edits are allowed, tells Claude to read `engine/API.md`, to expose tweaks and selectables, to keep `snapshot()`/`restore()` current, and not to start servers or tell the user to refresh.
 - Each project keeps its own Claude session and resumes it. The chat's New button clears it.
 - The child gets `WORLD_STUDIO_AGENT=1` (passed as `env` in `ChatService.prompt()`). The user's global `~/.claude/hooks/handoff-stop.mjs` exits early when it's set, so these short runs don't trigger the handoff Stop hook.
-- `DEVCHAT_MODEL` adds `--model`, and `DEVCHAT_CLAUDE` sets the CLI path.
+- `DEVCHAT_MODEL` sets the model, and `DEVCHAT_CLAUDE` sets the CLI path.
+- `check_game` (SDK runs only; `domain/check-game.ts`) runs TypeScript 7 with checkJs over `games/<slug>/`, against `engine/types.d.ts`, in about 0.1 s.
+  - A baseline taken when the prompt starts filters out errors the game already had. Each game has 7–10 inference errors; diagnostics are matched by file, code and message, not by line.
+  - The system prompt tells the agent to call it after editing, and the chat shows it as "Check the game for errors".
+  - Per-game tsconfigs are written to `.harness/tsconfig/<slug>.json`.
+- One real SDK run was verified on 2026-10-02 (Haiku, throwaway project): Read, Edit, `check_game`, done in 13.6 s for $0.096, then the scoped reload and a checkpoint diff of one file, +1.
 - Path-scoped permissions were checked with a CLI spike: edits outside the allowed folder are denied. Denied paths show up in the chat as a status line, "Blocked outside this game: ..." (the `result` callback in `ChatService.prompt()`).
 - Stop sends SIGTERM. The chat then says "Stopped. Open Checkpoints to undo any partial edits."
 
