@@ -18,6 +18,9 @@ import './ui/style.css';
 import './build/build.css';
 
 const DEV = import.meta.env.DEV;
+// Build mode needs the studio around the game (its panels are studio UI); a production build or an
+// exported game is play-only.
+const BUILD = DEV;
 const params = new URLSearchParams(location.search);
 // an exported single game (bun run export <slug>) plays its own game when the URL names none
 const slug = location.pathname.match(/^\/play\/([\w-]+)/)?.[1] || params.get('game') || import.meta.env.VITE_WS_GAME;
@@ -177,14 +180,14 @@ async function main() {
       title: meta.name || def.title,
       tag: meta.description || '',
       button: label,
-      controls: [...DEFAULT_CONTROLS, ...(def.controls || []), ['Tab', 'build mode']],
+      controls: [...DEFAULT_CONTROLS, ...(def.controls || []), ...(BUILD ? [['Tab', 'build mode']] : [])],
       onPlay: () => {
         if (!started) return start('play');
         hud.hideMenu();
         setMode('play');
       },
     });
-    addBuildButton();
+    if (BUILD) addBuildButton();
   }
   function addBuildButton() {
     const panel = hud.menuEl.querySelector('.panel');
@@ -234,17 +237,14 @@ async function main() {
       app.applyQuality();
       hud.toast(`Graphics: ${app.high ? 'High' : 'Low'}`);
     }
-    if (code === 'Tab' && started && (mode === 'play' || mode === 'build')) return setMode(mode === 'build' ? 'play' : 'build');
+    if (code === 'Tab' && BUILD && started && (mode === 'play' || mode === 'build')) return setMode(mode === 'build' ? 'play' : 'build');
     if (mode === 'map' && (code === 'KeyM' || code === 'Escape')) return setMode('play');
     if (code === 'KeyN' && (mode === 'play' || mode === 'build')) env.skip(((env.night > 0.5 ? 10 : 20.5) - env.time + 24) % 24);
     if (mode === 'build') {
       if (code === 'KeyK') screenshot();
       if (code === 'KeyP') build.actions.playFromHere();
       if (code === 'KeyF') build.frameSelection();
-      if (code === 'Escape') {
-        if (!build.el.sheet.classList.contains('hidden')) build.toggleSheet(false);
-        else select.select(null);
-      }
+      if (code === 'Escape') select.select(null);
       return;
     }
     if (mode !== 'play') return;
@@ -414,7 +414,7 @@ async function main() {
     } catch (err) {
       console.warn('Could not restore the previous session', err);
     }
-  } else if (params.get('build') === '1') start('build');
+  } else if (BUILD && params.get('build') === '1') start('build');
   frame();
 }
 

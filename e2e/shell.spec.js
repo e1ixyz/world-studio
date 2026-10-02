@@ -60,9 +60,14 @@ test('a prompt sent from the panel carries the selection and the game reloads in
   });
 });
 
-test("build mode's Projects link leaves the shell, not just the frame", async ({ page, base }) => {
-  const game = await openGame(page, base, 'meridian-city', '?build=1');
-  await game.locator('.ws-back').click();
+test("Projects links leave the shell, including the start menu's link inside the frame", async ({ page, base }) => {
+  await openGame(page, base, 'meridian-city', '?build=1');
+  await page.locator('.ws-back').click(); // build mode's top bar
+  await page.waitForURL(`${base}/`);
+  await expect(page.getByTestId('project-card').first()).toBeVisible();
+
+  const game = await openGame(page, base, 'meridian-city'); // start menu, inside the game frame
+  await game.locator('a.back').click();
   await page.waitForURL(`${base}/`);
   await expect(page.getByTestId('project-card').first()).toBeVisible();
 });

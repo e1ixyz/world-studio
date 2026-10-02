@@ -1,6 +1,7 @@
 // The studio HTTP API (Hono). Served at /__harness/* (what the current clients call) and at /api/*
 // (the typed client and the coming React shell).
 import { Hono } from 'hono';
+import { createMiddleware } from 'hono/factory';
 import { streamSSE } from 'hono/streaming';
 import {
   CreateProjectBody,
@@ -94,11 +95,12 @@ export function createApi(studio: Studio) {
       return c.json({ ok: true });
     });
 
+  // biome-ignore lint/suspicious/noExplicitAny: reads either a route param or a validated body
   const requireProject = (slugOf: (c: any) => string) =>
-    async (c: any, next: () => Promise<void>) => {
+    createMiddleware(async (c, next) => {
       if (!projects.exists(slugOf(c))) return c.json({ error: 'No such project' }, 404);
       await next();
-    };
+    });
 
   const api = new Hono()
     .use(localOnly)

@@ -18,12 +18,20 @@ type Game = {
   app?: { capture(o: { width?: number; quality?: number }): Promise<string>; renderer: { info: { render: Record<string, number>; memory: Record<string, number> } } };
   game?: { snapshot?(ctx: unknown): unknown };
   ctx?: unknown;
-  select?: { selected?: unknown; describe(): string };
+  select?: { selected?: unknown; describe(): string; select?(e: unknown): void };
   player?: { focus: { x: number; z: number }; driving?: unknown; flying?: boolean; altitude: number };
   camera: { getWorldDirection(v: unknown): { x: number; z: number }; position: { constructor: new () => unknown } };
-  build: { pos: { x: number; y: number; z: number }; pitch: number; yaw?: number };
+  build: { pos: { x: number; y: number; z: number }; pitch: number; yaw?: number } & BuildApi;
+  tweaks?: TweaksApi;
   env: { clock: string };
 };
+type BuildApi = {
+  state(): unknown;
+  setTime(h: number): void;
+  frameSelection(): void;
+  actions: { exit(): void; playFromHere(): void; toggleFreeze(): void };
+};
+type TweaksApi = { set(key: string, v: unknown): void; reset(key: string): void; discard(): void; markSaved(): void };
 type Harness = { getSelection?: () => string; screenshot?: () => void };
 const w = window as unknown as { __game?: Game; __harness?: Harness; devchat?: unknown };
 
@@ -88,6 +96,24 @@ if (embedded) {
       case 'exitPointerLock':
         document.exitPointerLock?.();
         break;
+      case 'buildAction': {
+        const g = w.__game;
+        if (!g) break;
+        const b = g.build;
+        if (m.a === 'play') b.actions.exit();
+        else if (m.a === 'toggleFreeze') b.actions.toggleFreeze();
+        else if (m.a === 'setTime') b.setTime(Number(m.value));
+        else if (m.a === 'playFromHere') b.actions.playFromHere();
+        else if (m.a === 'frame') b.frameSelection();
+        else if (m.a === 'deselect') g.select?.select?.(null);
+        else if (m.a === 'tweakSet' && m.key) g.tweaks?.set(m.key, m.value);
+        else if (m.a === 'tweakReset' && m.key) g.tweaks?.reset(m.key);
+        else if (m.a === 'tweakDiscard') g.tweaks?.discard();
+        else if (m.a === 'tweakSaved') g.tweaks?.markSaved();
+        lastBuild = ''; // answer with fresh state right away
+        sendBuild();
+        break;
+      }
       case 'probe':
         answerProbe(m.id, m.what).then(
           (data) => post({ t: 'probeResult', id: m.id, ok: true, data }),
@@ -126,6 +152,20 @@ if (embedded) {
       snapshot: json.length > 4000 ? `${json.slice(0, 4000)}… (truncated)` : snapshot,
     };
   }
+
+  // ---------- build mode state, for the studio's panels ----------
+  let lastBuild = '';
+  function sendBuild() {
+    const g = w.__game;
+    if (!g?.build?.state) return;
+    const state = g.build.state() as { time: number };
+    // the clock only needs minute steps to look live
+    const sig = JSON.stringify({ ...state, time: Math.round(state.time * 60) });
+    if (sig === lastBuild) return;
+    lastBuild = sig;
+    post({ t: 'build', state: state as never });
+  }
+  setInterval(() => w.__game?.state === 'build' && sendBuild(), 120);
 
   // ---------- state the studio shows (mode, selection) ----------
   let last = '';

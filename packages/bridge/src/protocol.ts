@@ -9,6 +9,44 @@ export const BRIDGE_VERSION = 1;
 const envelope = { bridge: z.literal(BRIDGE), v: z.literal(BRIDGE_VERSION) };
 const Mode = z.enum(['menu', 'play', 'build', 'paused', 'map']).or(z.string());
 
+// Build mode's state, for the studio's panels (engine/build/buildmode.js state()).
+export const TweakView = z.object({
+  key: z.string(),
+  name: z.string(),
+  group: z.string(),
+  engine: z.boolean(),
+  type: z.enum(['range', 'color', 'bool', 'select']),
+  value: z.unknown(),
+  initial: z.unknown(),
+  min: z.number().optional(),
+  max: z.number().optional(),
+  step: z.number().optional(),
+  options: z.array(z.string()).nullable(),
+  save: z.boolean(),
+});
+export type TweakView = z.infer<typeof TweakView>;
+export const SelectionView = z.object({
+  kind: z.string(),
+  id: z.union([z.string(), z.number()]).nullable(),
+  props: z.record(z.string(), z.unknown()),
+  source: z.string().nullable(),
+  center: z.tuple([z.number(), z.number(), z.number()]),
+  size: z.tuple([z.number(), z.number(), z.number()]),
+});
+export type SelectionView = z.infer<typeof SelectionView>;
+export const BuildState = z.object({
+  active: z.boolean(),
+  frozen: z.boolean(),
+  time: z.number(),
+  night: z.number(),
+  moved: z.boolean(),
+  selection: SelectionView.nullable(),
+  tweaks: z.array(TweakView),
+  unsaved: z.number(),
+  values: z.record(z.string(), z.unknown()),
+});
+export type BuildState = z.infer<typeof BuildState>;
+
 // game -> studio
 export const GameMessage = z.discriminatedUnion('t', [
   z.object({ ...envelope, t: z.literal('ready'), slug: z.string(), title: z.string().optional() }),
@@ -23,6 +61,7 @@ export const GameMessage = z.discriminatedUnion('t', [
   z.object({ ...envelope, t: z.literal('quickPrompt'), text: z.string() }),
   z.object({ ...envelope, t: z.literal('context'), id: z.number(), text: z.string() }),
   z.object({ ...envelope, t: z.literal('probeResult'), id: z.string(), ok: z.boolean(), data: z.unknown().optional(), error: z.string().optional() }),
+  z.object({ ...envelope, t: z.literal('build'), state: BuildState }),
 ]);
 export type GameMessage = z.infer<typeof GameMessage>;
 
@@ -36,6 +75,14 @@ export const StudioMessage = z.discriminatedUnion('t', [
   z.object({ ...envelope, t: z.literal('exitPointerLock') }),
   // a question from the agent: 'screenshot' (the view as a JPEG data URL) or 'state' (JSON)
   z.object({ ...envelope, t: z.literal('probe'), id: z.string(), what: z.enum(['screenshot', 'state']) }),
+  // build mode, from the studio's panels
+  z.object({
+    ...envelope,
+    t: z.literal('buildAction'),
+    a: z.enum(['play', 'toggleFreeze', 'setTime', 'playFromHere', 'frame', 'deselect', 'tweakSet', 'tweakReset', 'tweakDiscard', 'tweakSaved']),
+    key: z.string().optional(),
+    value: z.unknown().optional(),
+  }),
 ]);
 export type StudioMessage = z.infer<typeof StudioMessage>;
 

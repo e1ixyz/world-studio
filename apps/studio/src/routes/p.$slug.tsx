@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import '../../../../engine/ui/tokens.css';
+import type { BuildState } from '@ws/bridge';
+import { BuildPanels } from '../build/build-panels.tsx';
 import { AskPanel, type AskPanelHandle, type GameView } from '../chat/ask-panel.tsx';
 import '../chat/chat.css';
 import { feedFor, type LogItem } from '../chat/timeline.ts';
@@ -31,6 +33,7 @@ function ProjectShell() {
   });
   const [game, setGame] = useState<GameView>({ mode: null, selection: '', canShoot: false });
   const [shot, setShot] = useState<{ path: string; thumb: string } | null>(null);
+  const [build, setBuild] = useState<BuildState | null>(null);
   const [feed, setFeed] = useState<{ text: string; error?: boolean; until: number } | null>(null);
   const seenErrors = useRef(new Set<string>());
 
@@ -59,6 +62,9 @@ function ProjectShell() {
     switch (m.t) {
       case 'state':
         setGame({ mode: m.mode, selection: m.selection, canShoot: m.canShoot });
+        break;
+      case 'build':
+        setBuild(m.state);
         break;
       case 'open':
         show(m.focus);
@@ -114,6 +120,8 @@ function ProjectShell() {
       /* storage blocked */
     }
     post({ t: 'panel', open });
+    // build mode's panels make room for the Ask panel the same way they always have
+    document.body.classList.toggle('devchat-open', open);
   }, [open, slug, post]);
 
   // keys while the studio page (not the game) has focus
@@ -167,6 +175,20 @@ function ProjectShell() {
   return (
     <>
       <iframe ref={frame} className="dc-frame" title={project?.name || slug} src={`/play/${slug}?embed=1${query}`} allow="autoplay; fullscreen" data-testid="game-frame" />
+      {game.mode === 'build' && build && (
+        <BuildPanels
+          slug={slug}
+          name={project?.name || slug}
+          state={build}
+          send={post}
+          onAsk={() => {
+            show(false);
+            panel.current?.focusComposer();
+          }}
+          onAttachView={() => post({ t: 'screenshot' })}
+          refocusGame={() => frame.current?.focus()}
+        />
+      )}
       <div className={`dc-root${open ? ' open' : ''}${running ? ' running' : ''}${chat.offline ? ' offline' : ''}`}>
         <button type="button" className="dc-tab" title="Show Ask (`)" onClick={() => (open ? hide() : show(true))}>
           <span className="dc-tab-dot" />

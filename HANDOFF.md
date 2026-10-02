@@ -4,7 +4,7 @@ Last updated 2026-10-02.
 
 World Studio is a harness for building browser 3D games with Claude while they run. Every game lives in its own folder under `games/` and runs on one shared Three.js engine in `engine/`. A landing page lists the projects. Inside a game you can play it, or press Tab for build mode, click an object and tell Claude what to change. Claude edits only that game's folder, and the tab reloads in place with your position and progress kept.
 
-Until today (2026-09-30) this repo was a single game, Meridian City. It was restructured into World Studio the same day, and Meridian now lives in `games/meridian-city/` as the first game on the engine contract. Three.js 0.186 and Vite 8, plain JS ES modules for the engine, games and harness, no asset files. It is mid-way through a phased re-architecture (see Re-architecture below): a bun workspace, one studio daemon shared by the browser and the app, and tests on both. User-facing overview and controls are in [README.md](README.md). The engine contract for games is [engine/API.md](engine/API.md); this file links to it rather than repeating it.
+Until today (2026-09-30) this repo was a single game, Meridian City. It was restructured into World Studio the same day, and Meridian now lives in `games/meridian-city/` as the first game on the engine contract. Three.js 0.186 and Vite 8, no asset files. The engine and games are plain JS ES modules (typed through `engine/types.d.ts`); the studio is TypeScript: a bun workspace with one studio daemon (Hono, Vite in middleware mode, PGlite) shared by the browser and the desktop app, a React studio UI with the game in a frame, and the Claude Agent SDK. The re-architecture that got it there (P0-P8) finished on 2026-10-02; see Re-architecture below. User-facing overview and controls are in [README.md](README.md). The engine contract for games is [engine/API.md](engine/API.md); this file links to it rather than repeating it.
 
 The repo is private on GitHub at `e1ixyz/world-studio`. Work happens on the `architecture` branch, which branches off `electron-app` (which has the macOS desktop app); `main` was fast-forwarded to `electron-app` on 2026-10-02. A backup of the pre-restructure project is at `.harness/backup-pre-harness.tar.gz`.
 
@@ -26,11 +26,13 @@ Verified in the browser with Playwright on 2026-09-30:
 
 Not verified yet:
 
-- A permission denial through the chat UI. In the test the model declined the engine edit on its own, so the denial path never fired. A separate CLI spike did show that edits outside the allowed folder get denied.
-- The production build running end to end in a browser.
+- Pointer lock and audio inside the game frame, by a person, in both the browser and the app (headless Chromium has no pointer lock).
+- A real prompt from the installed app (the SDK runner was verified from a terminal daemon).
 - Mobile.
 
-Verified on 2026-10-02 after P0-P2 of the re-architecture: `bun run test` (22 unit tests), `bun run typecheck`, `bun run lint` and `npx vite build` pass. `bun run test:e2e` passes on both targets (web 11, app 9 + 2 web-only skips). By hand: a terminal daemon plus the app from source share one harness (a browser prompt streams into the app's chat, a settings change in the app updates the browser's menu live), quitting the app leaves the terminal daemon up, and an app-started daemon stops on quit and removes its lock. The installed app was rebuilt, found `claude`, started its daemon and served Meridian.
+Verified on 2026-10-02 at the end of the re-architecture: `bun run test` (53 unit tests), `bun run typecheck`, `bun run lint` (no errors) and `npx vite build` pass, and `bun run test:e2e` passes on web and Electron (51 tests, 5 single-target skips). Two real Haiku runs went through the SDK runner (an edit with `check_game`, and `view_game`). The production build and an export played from a plain static server.
+
+Verified earlier the same day, after P0-P2: `bun run test` (22 unit tests), `bun run typecheck`, `bun run lint` and `npx vite build` pass. `bun run test:e2e` passes on both targets (web 11, app 9 + 2 web-only skips). By hand: a terminal daemon plus the app from source share one harness (a browser prompt streams into the app's chat, a settings change in the app updates the browser's menu live), quitting the app leaves the terminal daemon up, and an app-started daemon stops on quit and removes its lock. The installed app was rebuilt, found `claude`, started its daemon and served Meridian.
 
 Known gaps:
 
@@ -38,7 +40,7 @@ Known gaps:
 - No mobile or touch controls.
 - Meridian: pedestrians don't collide with anything, and cars drive through them.
 - Meridian: AI cars can overlap at intersections, and driving has no damage.
-- Meridian: the minimap doesn't show the mountains. The minimap is hidden in build mode (`engine/build/build.css:21`).
+- Meridian: the minimap doesn't show the mountains. The minimap is hidden in build mode (`engine/build/build.css`).
 
 ## Run and verify
 
@@ -139,9 +141,12 @@ Drizzle with a Postgres schema (`src/schema.ts`) and generated migrations (`driz
 
 The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Every phase keeps the three games and both surfaces working.
 
-- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`), P4 (git checkpoints with diffs), P5 (Agent SDK runner, engine types, `check_game`, `env.setSky()`), P6a (React studio with the landing page), P6b (project shell: game frame, bridge, React Ask panel), P7 part 1 (live-game tools and permission cards), P8 (PGlite + Drizzle database for chats and runs, single-game export).
-- Next:
-  - P7 part 2: move build mode's top bar, Properties and tweaks panels into React over the bridge (`engine/build/buildmode.js` keeps the camera, picking and the selection tag).
+- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`), P4 (git checkpoints with diffs), P5 (Agent SDK runner, engine types, `check_game`, `env.setSky()`), P6a (React studio with the landing page), P6b (project shell: game frame, bridge, React Ask panel), P7 (live-game tools, permission cards, build-mode panels in React), P8 (PGlite + Drizzle database for chats and runs, single-game export).
+- Not done, on purpose or for later:
+  - WebGPU and TSL: the engine and games use EffectComposer bloom, the Sky shader and `onBeforeCompile` GLSL, and models write classic three.js far more reliably. It could come back as a per-game opt-in.
+  - Engine internals in TypeScript: games are typed through `engine/types.d.ts` and JSDoc already. Converting the engine would need `.js` entry shims for the games' relative imports.
+  - Serving games from a separate sandboxed origin: the bridge is ready for it (no same-window reach-ins, origin checks on both sides).
+  - Auth and multi-user: the database carries `workspace_id` and the API's local-only middleware is the place for a `Principal`; nothing else needs a rewrite.
 - Open follow-up: `games/meridian-city/game.js` still sets the Sky shader's uniforms directly for its Sky tweaks. That code is in uncommitted work on the game, so it was left alone; switch it to `ctx.env.setSky()`.
 - `engine/` stays at the repo root on purpose: games import it by relative path, and the agent's edit rules and old checkpoints use that path.
 
@@ -183,7 +188,7 @@ CLAUDE.md    project instructions for Claude: run the parity skill before finish
 - `player/controller.js` - walk, fly and drive physics, rooftop landing, chase camera. It takes a world `{ grid, groundY, spawn, limit }` from the game.
 - `audio/audio.js` - `GameAudio`, Web Audio synthesis.
 - `ui/hud.js` - a generic HUD that builds its own DOM: start menu, objective, minimap and big map through `setMap`, toast, modal. `ui/style.css` styles it.
-- `build/buildmode.js` - build mode: free camera, hover + click selection with a floating label, top bar, Properties panel (selection card + tweaks), shortcuts sheet, first-run tips. `build/icons.js` holds the icons. `build/selection.js` is the point-and-prompt registry, `build/tweaks.js` the tweak store, `build/build.css` the styles.
+- `build/buildmode.js` - build mode's in-world half: free camera, hover and click selection, the floating label, and `state()` for the studio's panels. `build/icons.js` holds the icons (the studio uses them too). `build/selection.js` is the point-and-prompt registry, `build/tweaks.js` the tweak store, `build/build.css` the label's styles.
 
 ### `games/<slug>/`
 
@@ -402,20 +407,40 @@ React 19 with TanStack Router (file-based routes in `src/routes/`; `routeTree.ge
 - The React and Tailwind plugins live in `vite.config.js` and are scoped to `apps/studio/src`. Games and the engine stay plain JS, with the harness's own reload handling.
 - `bun run typecheck` checks the studio too (`apps/studio/tsconfig.json`).
 
-## Build mode: `engine/build/buildmode.js`
+## Build mode: `engine/build/buildmode.js` (in-world) and `apps/studio/src/build/` (panels)
 
-- Tab toggles between play and build. The start menu has Play and Build mode buttons, and `?build=1` opens straight into build mode (`engine/runtime.js:409`).
+Build mode is split down the frame:
+
+- The engine (`buildmode.js`, inside the game) keeps what follows the 3D view: the free camera, hover and click picking, the hover outline, the selection box, and the floating label over the selection (`build.css` there now holds only that label and the HUD-hiding rules).
+- `BuildMode.state()` returns plain data (frozen, time, night, moved, the selection with center and size, every tweak, the unsaved count and the values to save). `setTime()`, `frameSelection()` and `actions` take commands back.
+- The studio (`build-panels.tsx`, `build.css`) draws everything flat over the frame:
+  - the top bar,
+  - Properties (the selection card and tweaks),
+  - the collapse rail,
+  - the hint bar,
+  - the shortcuts sheet,
+  - the first-run tips.
+- The bridge agent sends `build` state about every 120 ms while build mode is on, but only when something changed (the clock counts in minutes). The panels send `buildAction` messages: `play`, `toggleFreeze`, `setTime`, `playFromHere`, `frame`, `deselect`, and `tweakSet`, `tweakReset`, `tweakDiscard`, `tweakSaved`.
+- Save posts the values to `/api/tweaks`, then tells the game the values are saved.
+- A click on a panel button hands the keyboard back to the game frame, so WASD keeps flying the camera. Text fields, sliders and the Shortcuts buttons keep focus.
+- Sliders and the time control keep their own value while you drag, so the state echoing back doesn't fight the thumb.
+
+How it behaves:
+
+- Tab toggles between play and build. The start menu has Play and Build mode buttons, and `?build=1` opens straight into build mode.
+- Build mode only exists under the studio (`BUILD` in `engine/runtime.js`). A production build or an exported game is play-only: no Build mode button, Tab does nothing, and `?build=1` is ignored.
 - Free camera, separate from the player: right-drag looks, WASD moves, Q/E go down/up, Shift is fast, the wheel changes speed.
 - Layout: a top bar, a Properties panel on the left (collapsible to a small button) and the Ask panel on the right. Shared colors, buttons and sizes are in `engine/ui/tokens.css`; icons are inline SVG in `engine/build/icons.js`. Cyan marks actions and active state, yellow marks the selection only, coral marks errors and engine edits.
+- The panels make room for the Ask panel through the `devchat-open` body class, which is set on both the studio page and the game frame.
 - Top bar: "Projects" link, project name, a Play | Build switch, a time-of-day slider, "Pause world" / "Resume world", "Attach view" (K), "Test from here" (P) and a shortcuts button. Labels drop to icons on narrower windows.
 - Pause is on by default in build mode. It pauses `game.update` and the clock.
-- Hovering outlines what's clickable. Click selects. Picking is a ray against the boxes games register with `ctx.select`, so it works on merged and instanced geometry. The selection gets a yellow box and a floating label with an "Ask" button.
-- Properties: the selection card shows kind, id, 2-3 key props and size, with "More details" (position, remaining props, source file), "Ask about this" (focuses the prompt with the selection attached), Frame (F) and Deselect (Esc).
+- Hovering outlines what's clickable, and a click selects. Picking is a ray against the boxes games register with `ctx.select`, so it works on merged and instanced geometry. The selection gets a yellow box and a floating label with an "Ask" button.
+- Properties: the selection card shows kind, id, 2-3 key props and size. It has "More details" (position, remaining props, source file), "Ask about this" (focuses the prompt with the selection attached), Frame (F) and Deselect (Esc).
 - Tweaks sit below the selection card: a filter box, the game's groups open, and the engine's World/Player tweaks folded under "Engine settings". A footer shows "N unsaved changes" with Discard and Save (writes `games/<slug>/tweaks.json`). Changed rows show a reset button.
-- A bottom hint lists the camera keys, and "Shortcuts" opens a key reference. A three-step tip card shows the first time you enter build mode (remembered in localStorage).
+- A bottom hint lists the camera keys, and "Shortcuts" opens a key reference (Esc closes it). A three-step tip card shows the first time you enter build mode (remembered in localStorage, `worldstudio:build-tips-seen`).
+- Keys typed while the game has focus (K, P, F, Esc, Tab, N, G) are still handled by the runtime inside the frame.
 - Test from here (P) drops the player at the camera, flying if the camera is more than 4 m up.
-- The runtime sends a thumbnail 4 s after start, when you leave build mode, and every 3 minutes while playing (`engine/runtime.js:280`).
-- In a production build Save is disabled and Attach view downloads a JPEG instead.
+- The runtime sends a thumbnail 4 s after start, when you leave build mode, and every 3 minutes while playing.
 
 ## Hot reload
 

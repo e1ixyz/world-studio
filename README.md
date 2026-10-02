@@ -27,7 +27,7 @@ This builds `World Studio.app`, installs it in `~/Applications` and puts a link 
 
 Logs go to `~/Library/Logs/World Studio/main.log`.
 
-`bun run build` makes a production build in `dist/`, and `bun run preview` serves it. The production build plays the games but has no chat, no project editing and no saving.
+`bun run build` makes a production build in `dist/`, and `bun run preview` serves it. The production build plays the games but has no chat, no build mode, no project editing and no saving. `bun run export <slug>` builds a single game the same way into `exports/<slug>/`, ready for any static host.
 
 ## How to use it
 
