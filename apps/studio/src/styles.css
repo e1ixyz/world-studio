@@ -1,0 +1,49 @@
+/* Tailwind scans only the studio's own sources, never games/ or engine/. */
+@import 'tailwindcss' source(none);
+@source './';
+
+/* World Studio tokens (same values as engine/ui/tokens.css, which build mode and the chat use). */
+@theme {
+  --font-sans: 'Chakra Petch', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --color-bg: #070b12;
+  --color-surface: #0b111c;
+  --color-card: rgba(255, 255, 255, 0.035);
+  --color-ink: #eef6ff;
+  --color-dim: rgba(238, 246, 255, 0.58);
+  --color-line: rgba(255, 255, 255, 0.12);
+  --color-line-strong: rgba(255, 255, 255, 0.3);
+  --color-accent: #3cf2ff;
+  --color-accent-ink: #041016;
+  --color-select: #ffd24a;
+  --color-danger: #ff8a7a;
+  --color-danger-ink: #1a0805;
+  --color-danger-text: #ffb4a8;
+  --shadow-glow: 0 0 30px rgba(60, 242, 255, 0.3);
+  --shadow-glow-strong: 0 0 44px rgba(60, 242, 255, 0.55);
+  --shadow-dialog: 0 30px 90px rgba(0, 0, 0, 0.6);
+  --ease-ws: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@layer base {
+  html,
+  body {
+    min-height: 100%;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+  body {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(60, 242, 255, 0.09), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(255, 210, 74, 0.05), transparent 60%),
+      var(--color-bg);
+  }
+  button {
+    cursor: pointer;
+  }
+  ::selection {
+    background: rgba(60, 242, 255, 0.35);
+    color: #fff;
+  }
+}

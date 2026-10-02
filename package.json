@@ -21,7 +21,7 @@
     "test": "vitest run",
     "test:e2e": "vite build && playwright test",
     "lint": "biome lint .",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json && tsc -p apps/studio/tsconfig.json"
   },
   "dependencies": {
     "three": "^0.186.1"

@@ -8,8 +8,45 @@ test('landing page lists the projects', async ({ page, base }) => {
   await page.goto(`${base}/`, DOM);
   const { body } = await api(page, '/projects');
   for (const slug of GAMES) expect(body.map((p) => p.slug)).toContain(slug);
-  await expect(page.locator('.card .name', { hasText: 'Meridian City' })).toBeVisible();
-  await expect(page.locator('.card')).toHaveCount(body.length);
+  await expect(page.getByTestId('project-name').filter({ hasText: 'Meridian City' })).toBeVisible();
+  await expect(page.getByTestId('project-card')).toHaveCount(body.length);
+});
+
+test('landing page creates, renames and deletes projects', async ({ page, base }) => {
+  const name = `e2e ui ${Date.now().toString(36)}`;
+  await page.goto(`${base}/`, DOM);
+  await page.getByRole('button', { name: 'New project' }).first().click();
+  await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill(name);
+  await page.getByRole('radio', { name: /Blank/ }).click();
+  await page.getByRole('button', { name: 'Create' }).click();
+  await page.waitForURL(/\/play\/e2e-ui-[a-z0-9]+\?build=1$/);
+  const slug = new URL(page.url()).pathname.split('/')[2];
+  await page.waitForFunction(() => window.__game?.state === 'build', null, { polling: 100 });
+
+  await page.goto(`${base}/`, DOM);
+  const card = page.getByTestId('project-card').filter({ hasText: name });
+  await card.getByRole('button', { name: 'Rename' }).click();
+  await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill(`${name} renamed`);
+  await page.getByRole('button', { name: 'Save' }).click();
+  const renamed = page.getByTestId('project-card').filter({ hasText: `${name} renamed` });
+  await expect(renamed).toBeVisible();
+
+  await renamed.getByRole('button', { name: 'Delete' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(renamed).toHaveCount(0);
+  expect((await api(base, '/projects')).body.map((p) => p.slug)).not.toContain(slug);
+});
+
+test('the project list updates live when something changes elsewhere', async ({ page, base }) => {
+  await page.goto(`${base}/`, DOM);
+  await expect(page.getByTestId('project-card').first()).toBeVisible();
+  await withTempProject(page, base, async (slug) => {
+    const connected = page.waitForResponse((r) => r.url().endsWith('/api/events'));
+    await page.goto(`${base}/`, DOM);
+    await connected;
+    await api(base, `/projects/${slug}/rename`, { name: 'Renamed from elsewhere' });
+    await expect(page.getByTestId('project-name').filter({ hasText: 'Renamed from elsewhere' })).toBeVisible();
+  });
 });
 
 for (const slug of GAMES) {

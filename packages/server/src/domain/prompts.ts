@@ -17,8 +17,8 @@ export function systemPrompt(slug: string, meta: GameMeta, engine: boolean, { ch
 - Don't start servers or install packages. When you finish, the game reloads itself in place and restores the player; never tell the user to refresh.
 ${
     checkTool
-      ? '- After editing, call the check_game tool: a fast type and syntax check of this game against the engine contract (engine/types.d.ts). Errors that existed before this prompt are left out, so fix everything it reports. For larger changes also run \`npx vite build\`.'
-      : '- For larger changes run \`npx vite build\` to confirm it compiles.'
+      ? '- After editing, call the check_game tool: a fast type and syntax check of this game against the engine contract (engine/types.d.ts). Errors that existed before this prompt are left out, so fix everything it reports. For larger changes also run `npx vite build`.'
+      : '- For larger changes run `npx vite build` to confirm it compiles.'
   }
 - End with one or two plain sentences: what changed and how to see it in the game.`;
 }

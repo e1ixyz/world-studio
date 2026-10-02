@@ -12,7 +12,8 @@
       "!templates",
       "!dist",
       "!.harness",
-      "!**/*.css"
+      "!**/*.css",
+      "!**/routeTree.gen.ts"
     ]
   },
   "formatter": {
