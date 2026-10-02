@@ -86,11 +86,9 @@ export default defineGame({
     tweaks.add('Cores / Beam opacity', { value: 0.55, min: 0, max: 1, step: 0.01, onChange: (v) => (cores.beamMat.opacity = v) });
     tweaks.add('Cores / Beam color', { value: '#3cf2ff', onChange: (v) => cores.beamMat.color.set(v) });
     // the default sun halo is wide enough to wash the skyline out when looking sunward
-    const skyU = ctx.env.sky.material.uniforms;
-    const skyTweak = (k, d, apply) => tweaks.add(k, { ...d, onChange: (v) => { apply(v); ctx.env.envTimer = 1e9; } });
-    skyTweak('Sky / Sun glare', { value: 0.35, min: 0, max: 1.5, step: 0.05 }, (v) => (skyU.mieCoefficient.value = 0.004 * v));
-    skyTweak('Sky / Glare tightness', { value: 0.92, min: 0.5, max: 0.99, step: 0.01 }, (v) => (skyU.mieDirectionalG.value = v));
-    skyTweak('Sky / Haze', { value: 3, min: 1, max: 12, step: 0.5 }, (v) => (skyU.turbidity.value = v));
+    tweaks.add('Sky / Sun glare', { value: 0.35, min: 0, max: 1.5, step: 0.05, onChange: (v) => ctx.env.setSky({ mie: 0.004 * v }) });
+    tweaks.add('Sky / Glare tightness', { value: 0.92, min: 0.5, max: 0.99, step: 0.01, onChange: (v) => ctx.env.setSky({ glare: v }) });
+    tweaks.add('Sky / Haze', { value: 3, min: 1, max: 12, step: 0.5, onChange: (v) => ctx.env.setSky({ turbidity: v }) });
 
     // ---------- HUD ----------
     hud.setMap({

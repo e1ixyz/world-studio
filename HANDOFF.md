@@ -147,7 +147,6 @@ The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Eve
   - Engine internals in TypeScript: games are typed through `engine/types.d.ts` and JSDoc already. Converting the engine would need `.js` entry shims for the games' relative imports.
   - Serving games from a separate sandboxed origin: the bridge is ready for it (no same-window reach-ins, origin checks on both sides).
   - Auth and multi-user: the database carries `workspace_id` and the API's local-only middleware is the place for a `Principal`; nothing else needs a rewrite.
-- Open follow-up: `games/meridian-city/game.js` still sets the Sky shader's uniforms directly for its Sky tweaks. That code is in uncommitted work on the game, so it was left alone; switch it to `ctx.env.setSky()`.
 - `engine/` stays at the repo root on purpose: games import it by relative path, and the agent's edit rules and old checkpoints use that path.
 
 ## Layout
