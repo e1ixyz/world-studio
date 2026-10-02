@@ -338,8 +338,10 @@ async function main() {
     const fast = mode === 'play' && !typing && input.has('KeyT') ? 40 : 1;
     const n = env.update(simulate ? dt : 0, focus, camera, fast);
     game.onNight?.(n, wall, ctx);
-    app.bloom.strength = (0.12 + n * 0.6) * bloomScale;
-    app.bloom.threshold = 1.0 - n * 0.18;
+    // mipmap bloom spreads a highlight's energy instead of summing blur levels like UnrealBloomPass did,
+    // so these are much larger than the old strengths (matched by eye and mean brightness, day and night)
+    app.bloom.intensity = (1.3 + n * 13.1) * bloomScale;
+    app.bloom.luminanceMaterial.threshold = 1.0 - n * 0.18;
     audio.setAmbient(n);
 
     let prompt = '';

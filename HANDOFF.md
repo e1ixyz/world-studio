@@ -143,7 +143,7 @@ The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Eve
 
 - Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`), P4 (git checkpoints with diffs), P5 (Agent SDK runner, engine types, `check_game`, `env.setSky()`), P6a (React studio with the landing page), P6b (project shell: game frame, bridge, React Ask panel), P7 (live-game tools, permission cards, build-mode panels in React), P8 (PGlite + Drizzle database for chats and runs, single-game export).
 - Not done, on purpose or for later:
-  - WebGPU and TSL: the engine and games use EffectComposer bloom, the Sky shader and `onBeforeCompile` GLSL, and models write classic three.js far more reliably. It could come back as a per-game opt-in.
+  - WebGPU and TSL: the engine and games use WebGL post-processing (pmndrs `postprocessing`), the Sky shader and `onBeforeCompile` GLSL, and models write classic three.js far more reliably. It could come back as a per-game opt-in.
   - Engine internals in TypeScript: games are typed through `engine/types.d.ts` and JSDoc already. Converting the engine would need `.js` entry shims for the games' relative imports.
   - Serving games from a separate sandboxed origin: the bridge is ready for it (no same-window reach-ins, origin checks on both sides).
   - Auth and multi-user: the database carries `workspace_id` and the API's local-only middleware is the place for a `Principal`; nothing else needs a rewrite.
@@ -174,7 +174,7 @@ CLAUDE.md    project instructions for Claude: run the parity skill before finish
 - `API.md` - the game contract. Treat it as authoritative. Claude is told to read it before its first change in a conversation.
 - `types.d.ts`, `index.d.ts` - types for the contract (`GameContext`, `SetupResult`, `TweakDef`, `SelectEntry`, `defineGame`). The engine's own classes are typed from their JS and JSDoc. `check_game` and editors use them.
 - `registry.prod.js` - production-only `import.meta.glob` of every game's `game.js`, `game.json` and `tweaks.json`. See Gotchas for why it's a separate file.
-- `core/app.js` - `createApp`: renderer, scene, camera, bloom, the High/Low quality switch (`applyQuality`, `engine/core/app.js:33`) and frame capture for screenshots.
+- `core/app.js` - `createApp`: renderer, scene, camera, bloom, the High/Low quality switch (`applyQuality`) and frame capture for screenshots. High renders through pmndrs `postprocessing`: a half-float scene with 4x MSAA, then one `EffectPass` with `BloomEffect` (mipmap blur, 5 levels, radius 0.75, ADD blend) and ACES `ToneMappingEffect`, which picks up `renderer.toneMappingExposure`. Low skips the composer and lets the renderer tone-map. `runtime.js` sets the bloom's intensity (1.3 by day to 14.4 at night, times the World / Bloom tweak) and threshold every frame. Those numbers were matched by eye and by mean frame brightness against the old `UnrealBloomPass`; with the default 8 levels, Cyberpunk City's bright windows washed the frame gray.
 - `core/input.js` - keyboard state shared by play and build mode. It ignores keys typed into text fields.
 - `core/rng.js` - `mulberry32`, `hashString`, and `createRng(seed)` (`engine/core/rng.js:21`).
 - `core/hotstate.js` - per-slug sessionStorage snapshot for reloads. Snapshots older than 2 minutes are dropped (`engine/core/hotstate.js:2`).
@@ -436,7 +436,7 @@ Games get rigid-body physics and a few plain Three.js helpers. All of it is inst
 - **Fixed along the way:**
   - `ctx.select.add` crashed on an entry with `getBox()` and no `box`. It now accepts that, and the crash took the agent's whole game down.
   - With no window open, the live tools' error now tells the agent `check_game` doesn't prove the game starts, so it shouldn't say it works.
-- **Not done yet:** pmndrs `postprocessing` in place of the EffectComposer bloom, Rapier's vehicle controller for cars, a character-controller player mode, ZzFX sound effects.
+- **Not done yet:** Rapier's vehicle controller for cars, a character-controller player mode, ZzFX sound effects.
 
 ## Themes: `packages/theme/`
 
@@ -532,6 +532,7 @@ Dev server only: Enter opens the quick prompt bar, backtick toggles the chat pan
 - `games/<slug>/game.json`, `tweaks.json` and `thumb.jpg` changes never reload a game.
 - One Claude job per project at a time. While any job runs, in any project, all pending reloads wait until it finishes.
 - Copying a template or duplicating a project writes files the watcher reports a second or two later, once per Vite environment (client and ssr). `ReloadCoordinator.markFresh()` records each copied file's mtime and skips events while it still matches, so a new project's tab doesn't reload on its own.
+- Only one copy of the Electron shell runs at a time (`app.requestSingleInstanceLock()` in `apps/desktop/main.js`). While `World Studio.app` is open, `npx electron .` and every `[electron]` e2e test quit at launch ("Target page, context or browser has been closed"). Quit the app before `bun run test:e2e` or a CDP check.
 - `node_modules/.package-lock.json` (left behind by npm) makes Vite hash a different lockfile depending on who launched it, re-optimize deps on every start, and reload open pages. Since the move to bun it must not exist; `bun install` doesn't recreate it.
 - Production-only globs live in the `registry.prod.js` files and load through dynamic `import()`, so the dev server never watches them. A static glob made every project creation reload every tab.
 - Per-game RNG: Meridian uses its own `games/meridian-city/rng.js`, seeded 20260930 (`games/meridian-city/rng.js:4`). Changing the order of `rand()` calls regenerates a different city. It also breaks reload restore of collected cores, which are matched by position within 1 m (`games/meridian-city/game.js:154`).

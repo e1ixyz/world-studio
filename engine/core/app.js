@@ -1,8 +1,5 @@
 import * as THREE from 'three';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { BlendFunction, BloomEffect, EffectComposer, EffectPass, RenderPass, ToneMappingEffect, ToneMappingMode } from 'postprocessing';
 
 // Renderer, scene, camera, bloom and the High/Low quality switch.
 export function createApp(container) {
@@ -18,11 +15,18 @@ export function createApp(container) {
   const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.2, 12000);
   camera.rotation.order = 'YXZ';
 
-  const composer = new EffectComposer(renderer);
+  // High quality renders through pmndrs postprocessing: HDR scene, MSAA, mipmap bloom, then the same
+  // ACES tone mapping the renderer applies in Low (which reads renderer.toneMappingExposure too).
+  const composer = new EffectComposer(renderer, {
+    frameBufferType: THREE.HalfFloatType,
+    multisampling: Math.min(4, renderer.capabilities.maxSamples),
+  });
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2), 0.5, 0.5, 0.9);
-  composer.addPass(bloom);
-  composer.addPass(new OutputPass());
+  // Added rather than screened, so HDR highlights survive until tone mapping. Five mip levels spread a
+  // glow about as far as UnrealBloomPass did; the default eight wash large bright surfaces (cyberpunk
+  // windows) into a gray haze. runtime.js drives intensity and threshold with the night.
+  const bloom = new BloomEffect({ blendFunction: BlendFunction.ADD, mipmapBlur: true, levels: 5, radius: 0.75, intensity: 1.3, luminanceThreshold: 0.9, luminanceSmoothing: 0.03 });
+  composer.addPass(new EffectPass(camera, bloom, new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC })));
 
   const app = {
     renderer, scene, camera, composer, bloom,
@@ -34,7 +38,6 @@ export function createApp(container) {
       const pr = Math.min(window.devicePixelRatio, app.high ? 1.5 : 1);
       renderer.setPixelRatio(pr);
       renderer.setSize(window.innerWidth, window.innerHeight);
-      composer.setPixelRatio(pr);
       composer.setSize(window.innerWidth, window.innerHeight);
       if (app.shadowLight) app.shadowLight.castShadow = app.high;
     },
