@@ -59,7 +59,7 @@ bun run lint         # Biome (games/ and templates/ are excluded)
 - The daemon listens on 5173 or the next free port and writes the real URL to `.harness/daemon.json`. Use that URL, or the one the terminal prints.
 - `bun run dev:vite` still starts plain Vite with the harness plugin, without the daemon or its lock. Use it only for debugging.
 - `vite.config.js` sets `appType: 'mpa'` with two inputs, `index.html` (landing) and `play.html` (game runtime), turns the HMR error overlay off so it doesn't cover the chat panel, and keeps `.harness/` out of the file watcher.
-- In dev, games open at `/play/<slug>`. The plugin rewrites that URL to `play.html` (the `configureServer` middleware in `harness/server/plugin.js`). In production the landing page links to `play.html?game=<slug>` instead.
+- In dev, games open at `/play/<slug>`. The plugin rewrites that URL to `play.html` (`studioPlugin` in `packages/server/src/vite/plugin.ts`). In production the landing page links to `play.html?game=<slug>` instead.
 - Before calling a change done: `npx vite build` must compile, and the game must load and play in a browser.
 - `window.__game` (`engine/runtime.js:398`) exposes `app`, `ctx`, `game`, `player`, `env`, `camera`, `select`, `tweaks`, `build`, `input`, `start(mode)`, `setMode(mode)` and a `state` getter. Playwright uses it to drive and inspect games. `window.__harness` (`engine/runtime.js:399`) carries the slug, the game's metadata and the current selection text for the chat client.
 
@@ -117,9 +117,8 @@ One Node process per checkout owns the harness: chats, agent jobs, checkpoints a
 
 The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Every phase keeps the three games and both surfaces working.
 
-- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`).
+- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`).
 - Next:
-  - P3: Hono API with zod routes, and splitting `harness/server/plugin.js` into domain modules.
   - P4: shadow-git checkpoints with diffs.
   - P5: Agent SDK runner behind an `AgentRunner` interface, plus engine `.d.ts` types and a `check_game` tool.
   - P6: React studio shell (TanStack Router and Query, shadcn, Tailwind v4) with the game in an iframe and a typed postMessage bridge.
@@ -133,8 +132,8 @@ The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Eve
 engine/      shared runtime every game runs on
 games/       one folder per project (games/<slug>/)
 templates/   starting points copied into games/<slug>/ on create
-harness/     dev-only tooling: server plugin, in-game chat, landing page
-packages/    server (studio daemon), shared (zod schemas)
+harness/     dev-only browser code: in-game chat, landing page
+packages/    server (studio daemon, API, domain), shared (zod schemas)
 apps/desktop/ Electron shell for the macOS app
 test/unit/   Vitest unit tests;  e2e/  Playwright suite (web + Electron)
 scripts/     fake-claude.mjs (stand-in agent for tests)
@@ -185,7 +184,6 @@ Templates are copied, never linked. See Gotchas.
 
 ### `harness/`
 
-- `server/plugin.js` - the Vite plugin, mounted by the studio daemon. Dev only (`apply: 'serve'`).
 - `client/chat.js`, `client/chat.css` - the in-game chat panel.
 - `landing/main.js`, `landing/landing.css` - the landing page. `landing/registry.prod.js` globs every `game.json` for the production landing page.
 
@@ -209,20 +207,40 @@ The runtime adds its own tweaks after the game's, so the game's show first in th
 
 `ctx.rng` is seeded from the project slug (`engine/runtime.js:77`).
 
-## Harness server: `harness/server/plugin.js`
+## Studio server: `packages/server/src/`
+
+The old single-file Vite plugin is gone, replaced by:
+
+- `studio.ts`: `createStudio({ root, runner })` wires the services together.
+- `domain/`:
+  - `projects.ts`: projects and templates.
+  - `chat.ts`: `ChatService`, which owns logs, jobs and subscribers.
+  - `chat-store.ts`: `ChatRepository`, JSON-backed.
+  - `checkpoints/`: `CheckpointStore`, folder copies for now.
+  - `reloads.ts`: `ReloadCoordinator`.
+  - `settings.ts`, `prompts.ts`, `events.ts` (the `StudioEvents` bus) and `paths.ts`.
+  - `agent/`: the `AgentRunner` interface and `CliRunner`.
+- `app.ts`: the Hono API.
+- `middleware/`: `localOnly`, and `body(schema)`, which validates JSON bodies with the zod schemas from `@ws/shared`.
+- `vite/plugin.ts`: `studioPlugin(studio)`, the Vite adapter. It mounts the API, rewrites `/play/<slug>`, injects the chat client, feeds `hotUpdate` into the reload coordinator, and forwards studio events as HMR custom events.
+- `client.ts`: `studioClient()`, a typed `hono/client` for TS callers. `client.typetest.ts` checks at compile time that it sees the routes and bodies.
+
+`vite.config.js` no longer loads any plugin itself; the daemon adds `studioPlugin` inline.
 
 ### Projects API
 
-All routes sit under `/__harness`.
+The same Hono app is served at `/__harness/*`, which the current JS clients call, and at `/api/*`, the typed client's base.
 
 - `GET /projects` lists projects, newest edit first, with a thumbnail URL and a `running` flag.
-- `POST /projects` creates one from `{ name, template, description }`. It copies `templates/<template>/` into `games/<slug>/` and writes `game.json` (`createProject` in `harness/server/plugin.js`). If a description was given, Claude builds it as the project's first prompt.
-- `POST /projects/<slug>/rename`, `/duplicate` and `/delete`. Delete moves the folder to `.harness/trash/` and refuses while Claude is working on that project (the `delete` route in `harness/server/plugin.js`).
+- `POST /projects` creates one from `{ name, template, description }`. It copies `templates/<template>/` into `games/<slug>/` and writes `game.json` (`Projects.create`). If a description was given, Claude builds it as the project's first prompt.
+- `POST /projects/<slug>/rename`, `/duplicate` and `/delete`. Delete moves the folder to `.harness/trash/` and refuses while Claude is working on that project (`ChatService.forget` throws `BusyError`, which the API turns into a 409).
 - `GET /templates` lists folders in `templates/` that have a `game.js`.
-- `GET /settings` returns the studio settings and `POST /settings` takes `{ alwaysEngine }`. It writes `.harness/settings.json` and sends a `harness:settings` HMR event so open tabs on the same server update (the `/settings` route in `harness/server/plugin.js`).
+- `GET /settings` returns the studio settings and `POST /settings` takes `{ alwaysEngine }`. It writes `.harness/settings.json` and sends a `harness:settings` HMR event so open tabs on the same server update (`SettingsStore.update` emits `settings` on the event bus).
 - `POST /shot`, `/thumb` and `/tweaks` take `{ slug, ... }`. They write a screenshot to `.harness/shots/<slug>/`, `thumb.jpg`, or `tweaks.json`.
 
-The server sends two custom HMR events. `harness:projects` tells the landing page to re-render. `harness:reload` tells game tabs to reload (see Reloads).
+The plugin turns studio events into three custom HMR events. `harness:projects` tells the landing page to re-render, `harness:reload` tells game tabs to reload (see Reloads), and `harness:settings` carries the new settings. `GET /api/events` streams the same events, plus `job` (start and stop), as SSE for clients outside Vite's HMR.
+
+Request bodies are checked against the zod schemas in `packages/shared/src/schemas.ts`. Bad JSON gets a 400, an empty body counts as `{}`, and an unknown project gets a 404.
 
 ### Per-project chat
 
@@ -233,7 +251,7 @@ The server sends two custom HMR events. `harness:projects` tells the landing pag
 
 ### Claude runs
 
-`run()` in `harness/server/plugin.js` spawns the CLI headless in the project root:
+`ChatService.prompt()` checkpoints, logs the prompt and starts the runner. `CliRunner` (`domain/agent/cli-runner.ts`) spawns the CLI headless in the project root:
 
 ```
 claude -p <prompt> --output-format stream-json --verbose --permission-mode default
@@ -242,34 +260,34 @@ claude -p <prompt> --output-format stream-json --verbose --permission-mode defau
   [--resume <sessionId>]
 ```
 
-- Engine edits add `Edit(engine/**)` and `Write(engine/**)`. A prompt gets them when the client sends `engine: true` ("Allow engine edits", one prompt) or when the `alwaysEngine` setting is on. The server checks the setting itself in `run()`, so it also covers a new project's first build from the landing page.
+- Engine edits add `Edit(engine/**)` and `Write(engine/**)`. A prompt gets them when the client sends `engine: true` ("Allow engine edits", one prompt) or when the `alwaysEngine` setting is on. The server checks the setting itself in `ChatService.prompt()`, so it also covers a new project's first build from the landing page.
 - `systemPrompt()` names the game folder, says whether engine edits are allowed, tells Claude to read `engine/API.md`, to expose tweaks and selectables, to keep `snapshot()`/`restore()` current, and not to start servers or tell the user to refresh.
 - Each project keeps its own Claude session and resumes it. The chat's New button clears it.
-- The child gets `WORLD_STUDIO_AGENT=1` (the `spawn` call in `run()`). The user's global `~/.claude/hooks/handoff-stop.mjs` exits early when it's set, so these short runs don't trigger the handoff Stop hook.
+- The child gets `WORLD_STUDIO_AGENT=1` (passed as `env` in `ChatService.prompt()`). The user's global `~/.claude/hooks/handoff-stop.mjs` exits early when it's set, so these short runs don't trigger the handoff Stop hook.
 - `DEVCHAT_MODEL` adds `--model`, and `DEVCHAT_CLAUDE` sets the CLI path.
-- Path-scoped permissions were checked with a CLI spike: edits outside the allowed folder are denied. Denied paths show up in the chat as a status line, "Blocked outside this game: ..." (the `result` handler in `run()`).
+- Path-scoped permissions were checked with a CLI spike: edits outside the allowed folder are denied. Denied paths show up in the chat as a status line, "Blocked outside this game: ..." (the `result` callback in `ChatService.prompt()`).
 - Stop sends SIGTERM. The chat then says "Stopped. Open Checkpoints to undo any partial edits."
 
 ### Checkpoints
 
-- Before every prompt, `checkpoint()` copies `games/<slug>/` (minus `thumb.jpg`), plus `engine/` when engine edits are allowed, into `.harness/checkpoints/<slug>/<id>/` with a `meta.json` holding the prompt, the time and the engine flag.
+- Before every prompt, `FsCheckpointStore.create()` copies `games/<slug>/` (minus `thumb.jpg`), plus `engine/` when engine edits are allowed, into `.harness/checkpoints/<slug>/<id>/` with a `meta.json` holding the prompt, the time and the engine flag.
 - It keeps the newest 30 per project (`MAX_CHECKPOINTS`).
-- `restoreCheckpoint()` first saves a "Before restoring: ..." checkpoint, so a restore can be undone. It then replaces the game folder (and `engine/` if the checkpoint has it), keeps the current thumbnail and reloads the affected tabs.
+- `FsCheckpointStore.restore()` first saves a "Before restoring: ..." checkpoint, so a restore can be undone. It then replaces the game folder (and `engine/` if the checkpoint has it), keeps the current thumbnail and reloads the affected tabs.
 - Restore refuses while a job is running.
 
 ### Reloads
 
-- The plugin's `hotUpdate` hook takes over reloads for code files in `games/` and `engine/` (`.js`, `.mjs`, `.json`, `.html`, `.glsl`, `.frag`, `.vert`) and returns `[]`, so Vite does no reload of its own.
+- The plugin's `hotUpdate` hook hands every file event to `ReloadCoordinator.fileChanged()`, which takes over reloads for code files in `games/` and `engine/` (`.js`, `.mjs`, `.json`, `.html`, `.glsl`, `.frag`, `.vert`) and returns `[]`, so Vite does no reload of its own.
 - A changed file in `games/<slug>/` queues a reload for that slug. A changed file in `engine/` queues one for every tab.
-- While any Claude job runs, in any project, queued reloads wait. When the last job ends, `flush()` invalidates the changed modules, logs a reload line in the chat and sends one `harness:reload` with `{ slugs: [...] }` or `{ all: true }`. With no job running, a change flushes after a 180 ms debounce.
+- While any Claude job runs, in any project, queued reloads wait. When the last job ends, `flush()` (via a `ModuleInvalidator` the plugin provides over Vite's module graph) invalidates the changed modules, logs a reload line in the chat and sends one `harness:reload` with `{ slugs: [...] }` or `{ all: true }`. With no job running, a change flushes after a 180 ms debounce.
 - The runtime checks the slug and reloads only matching tabs (`engine/runtime.js:390`).
 - `game.json`, `tweaks.json` and `thumb.jpg` never reload a game. A `game.json` change only refreshes the landing page.
 
 ### Security
 
 - The daemon rejects any `Host` header other than localhost, 127.0.0.1 or [::1] before Vite sees the request, which closes the DNS-rebinding gap the Origin check alone left open.
-- Requests must come from a loopback address (`handler` in `harness/server/plugin.js`).
-- POSTs need the header `X-Devchat: 1` and an `Origin` whose host matches `Host` (`handler` in `harness/server/plugin.js`). This blocks cross-site requests.
+- Requests must come from a loopback address (`middleware/local-only.ts`).
+- POSTs need the header `X-Devchat: 1` and an `Origin` whose host matches `Host` (same file). This blocks cross-site requests.
 - The daemon listens on `localhost` only, so it isn't reachable from the LAN. Keep it that way: the chat can edit files.
 
 ### Cost
@@ -354,11 +372,12 @@ Dev server only: Enter opens the quick prompt bar, backtick toggles the chat pan
 - Edit permissions for the agent use absolute paths (`Edit(//<abs>/games/<slug>/**)`). Relative rules resolve against Claude's current directory, so one `cd games/<slug>` in a shell command made the game's own files unwritable (seen on 2026-10-01 in the Meridian penthouse prompt).
 
 - Engine CSS edits go through Vite's normal CSS HMR. The harness doesn't intercept them (the `CODE_FILE` check in `hotUpdate`).
-- Editing `harness/server/plugin.js` or `vite.config.js` restarts the Vite server. Open tabs reload through Vite's own reconnect, with no snapshot guarantee. The chat shows "dev server offline" for a moment.
+- Editing `vite.config.js` restarts Vite inside the daemon. Open tabs reload through Vite's own reconnect, with no snapshot guarantee. Changes to `packages/server/` need a daemon restart (Ctrl+C and `bun run dev`, or quit and reopen the app if it owns the daemon).
+- Server code in `packages/` must stay erasable TypeScript (no enums, namespaces or constructor parameter properties). Node strips the types at runtime, and `bun run typecheck` enforces it with `erasableSyntaxOnly`.
 - Editing `templates/` never reloads anything. Templates are copied only when a project is created, so changing a template doesn't change existing games.
 - `games/<slug>/game.json`, `tweaks.json` and `thumb.jpg` changes never reload a game.
 - One Claude job per project at a time. While any job runs, in any project, all pending reloads wait until it finishes.
-- Copying a template or duplicating a project writes files the watcher reports a second or two later, once per Vite environment (client and ssr). `markFresh()` records each copied file's mtime, and `hotUpdate` skips events for a file whose mtime still matches, so a new project's tab doesn't reload on its own.
+- Copying a template or duplicating a project writes files the watcher reports a second or two later, once per Vite environment (client and ssr). `ReloadCoordinator.markFresh()` records each copied file's mtime and skips events while it still matches, so a new project's tab doesn't reload on its own.
 - `node_modules/.package-lock.json` (left behind by npm) makes Vite hash a different lockfile depending on who launched it, re-optimize deps on every start, and reload open pages. Since the move to bun it must not exist; `bun install` doesn't recreate it.
 - Production-only globs live in the `registry.prod.js` files and load through dynamic `import()`, so the dev server never watches them. A static glob made every project creation reload every tab.
 - Per-game RNG: Meridian uses its own `games/meridian-city/rng.js`, seeded 20260930 (`games/meridian-city/rng.js:4`). Changing the order of `rand()` calls regenerates a different city. It also breaks reload restore of collected cores, which are matched by position within 1 m (`games/meridian-city/game.js:154`).

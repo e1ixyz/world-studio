@@ -1,6 +1,7 @@
 // The World Studio daemon: one Node process per checkout that owns the harness (chats, agent
 // jobs, checkpoints, reloads) and serves the studio, games and engine through Vite in middleware
-// mode. The browser and the desktop app are both just clients of it.
+// mode. The browser and the desktop app are both just clients of it. The studio itself (projects,
+// chats, checkpoints, reloads) is in studio.ts; vite/plugin.ts mounts it into Vite.
 //
 // Started by `bun run dev` (cli.ts) or by the desktop app (Electron utilityProcess). Runs on
 // plain Node 24, which strips the TypeScript types itself.
@@ -8,6 +9,8 @@ import http from 'node:http';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { APP_ID, claimLock, findDaemon, releaseLock, writeLock } from './lock.ts';
+import { createStudio } from './studio.ts';
+import { studioPlugin } from './vite/plugin.ts';
 
 export const DAEMON_VERSION = 1;
 const ALLOWED_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -85,9 +88,11 @@ export async function startDaemon({ root, port = 5173, strictPort = false, lock 
     }
     // The checkout's own Vite, so the daemon always matches the vite.config.js next to it.
     const { createServer } = (await import(pathToFileURL(path.join(root, 'node_modules/vite/dist/node/index.js')).href)) as typeof import('vite');
+    const studio = createStudio({ root });
     vite = await createServer({
       root,
       configFile: path.join(root, 'vite.config.js'),
+      plugins: [studioPlugin(studio)],
       appType: 'mpa',
       clearScreen: false,
       server: { middlewareMode: true, ws: { server: httpServer } }, // hmr.overlay stays off via vite.config.js
