@@ -257,7 +257,7 @@ The same Hono app is served at `/__harness/*`, which the current JS clients call
 - `POST /projects` creates one from `{ name, template, description }`. It copies `templates/<template>/` into `games/<slug>/` and writes `game.json` (`Projects.create`). If a description was given, Claude builds it as the project's first prompt.
 - `POST /projects/<slug>/rename`, `/duplicate` and `/delete`. Delete moves the folder to `.harness/trash/` and refuses while Claude is working on that project (`ChatService.forget` throws `BusyError`, which the API turns into a 409).
 - `GET /templates` lists folders in `templates/` that have a `game.js`.
-- `GET /settings` returns the studio settings and `POST /settings` takes `{ alwaysEngine }`. It writes `.harness/settings.json` and sends a `harness:settings` HMR event so open tabs on the same server update (`SettingsStore.update` emits `settings` on the event bus).
+- `GET /settings` returns the studio settings and `POST /settings` takes `{ alwaysEngine?, theme? }`. It writes `.harness/settings.json` and sends a `harness:settings` HMR event so open tabs on the same server update (`SettingsStore.update` emits `settings` on the event bus).
 - `POST /shot`, `/thumb` and `/tweaks` take `{ slug, ... }`. They write a screenshot to `.harness/shots/<slug>/`, `thumb.jpg`, or `tweaks.json`.
 
 The plugin turns studio events into three custom HMR events. `harness:projects` tells the landing page to re-render, `harness:reload` tells game tabs to reload (see Reloads), and `harness:settings` carries the new settings. `GET /api/events` streams the same events, plus `job` (start and stop), as SSE for clients outside Vite's HMR.
