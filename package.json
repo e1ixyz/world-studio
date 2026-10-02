@@ -3,22 +3,37 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "packageManager": "bun@1.3.14",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "engine"
+  ],
+  "productName": "World Studio",
+  "main": "desktop/main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "app": "electron .",
     "app:install": "node desktop/package.mjs",
-    "app:icon": "electron desktop/make-icon.mjs"
+    "app:icon": "electron desktop/make-icon.mjs",
+    "test": "vitest run",
+    "test:e2e": "vite build && playwright test",
+    "lint": "biome lint .",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
     "@electron/packager": "^20.3.0",
+    "@playwright/test": "^1.63.0",
     "electron": "^44.5.1",
-    "vite": "^8.3.1"
-  },
-  "productName": "World Studio",
-  "main": "desktop/main.js"
+    "vite": "^8.3.1",
+    "vitest": "^5.0.3",
+    "typescript": "^7.0.2",
+    "@types/node": "^24.10.0"
+  }
 }

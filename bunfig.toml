@@ -1,0 +1,4 @@
+[install]
+# desktop/main.js imports the checkout's node_modules/vite directly, and @electron/packager
+# copies the app's node_modules; both want the flat npm-style layout.
+linker = "hoisted"
