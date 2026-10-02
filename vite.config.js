@@ -21,7 +21,8 @@ export default defineConfig({
   server: {
     // the chat sidebar shows errors itself; the full-screen overlay would cover it
     hmr: { overlay: false },
-    watch: { ignored: ['**/.harness/**', '**/.devchat/**', '**/.tanstack/**'] },
+    // exports/ is build output (bun run export); its index.html would otherwise reload every open page
+    watch: { ignored: ['**/.harness/**', '**/.devchat/**', '**/.tanstack/**', '**/exports/**'] },
   },
   build: {
     rollupOptions: { input: { index: 'index.html', play: 'play.html' } },

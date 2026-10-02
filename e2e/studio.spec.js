@@ -149,6 +149,24 @@ test('engine reloads are scoped: a game edit reloads only that game', async ({ p
   });
 });
 
+test('writing an export does not reload open pages', async ({ page, base }) => {
+  const game = await openGame(page, base, 'medieval-village');
+  await page.evaluate(() => { window.__e2eMarker = true; });
+  await markWindow(game);
+  const dir = path.join(ROOT, 'exports', `e2e-probe-${Date.now().toString(36)}`);
+  try {
+    // what `bun run export` writes: an index.html and assets
+    fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'index.html'), '<!doctype html><title>probe</title>');
+    fs.writeFileSync(path.join(dir, 'assets', 'probe.js'), 'export {};');
+    await page.waitForTimeout(3000);
+    expect(await page.evaluate(() => window.__e2eMarker)).toBe(true);
+    expect(await game.evaluate(() => window.__e2eMarker)).toBe(true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('production build has no harness code', async ({}, info) => {
   test.skip(info.project.name === 'electron', 'build output is the same for both');
   const dist = path.join(ROOT, 'dist/assets');
