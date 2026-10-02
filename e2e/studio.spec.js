@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DOM, ROOT, api, expect, gameFile, markWindow, openGame, readChat, test, waitForReload, withTempProject } from './fixtures.js';
+import { DOM, ROOT, api, gameFrame, expect, gameFile, markWindow, openGame, readChat, test, waitForReload, withTempProject } from './fixtures.js';
 
 const GAMES = ['meridian-city', 'cyberpunk-city', 'medieval-village'];
 
@@ -19,9 +19,9 @@ test('landing page creates, renames and deletes projects', async ({ page, base }
   await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill(name);
   await page.getByRole('radio', { name: /Blank/ }).click();
   await page.getByRole('button', { name: 'Create' }).click();
-  await page.waitForURL(/\/play\/e2e-ui-[a-z0-9]+\?build=1$/);
+  await page.waitForURL(/\/p\/e2e-ui-[a-z0-9]+\?build=1$/);
   const slug = new URL(page.url()).pathname.split('/')[2];
-  await page.waitForFunction(() => window.__game?.state === 'build', null, { polling: 100 });
+  await (await gameFrame(page)).waitForFunction(() => window.__game?.state === 'build', null, { polling: 100 });
 
   await page.goto(`${base}/`, DOM);
   const card = page.getByTestId('project-card').filter({ hasText: name });
@@ -53,29 +53,31 @@ for (const slug of GAMES) {
   test(`${slug} boots and renders`, async ({ page, base }) => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    await openGame(page, base, slug, '?build=1');
-    await expect.poll(() => page.evaluate(() => window.__game.state)).toBe('build');
-    const f0 = await page.evaluate(() => window.__game.app.renderer.info.render.frame);
-    await expect.poll(() => page.evaluate(() => window.__game.app.renderer.info.render.frame), { timeout: 10_000 }).toBeGreaterThan(f0 + 5);
+    const game = await openGame(page, base, slug, '?build=1');
+    await expect.poll(() => game.evaluate(() => window.__game.state)).toBe('build');
+    const f0 = await game.evaluate(() => window.__game.app.renderer.info.render.frame);
+    await expect.poll(() => game.evaluate(() => window.__game.app.renderer.info.render.frame), { timeout: 10_000 }).toBeGreaterThan(f0 + 5);
     expect(errors).toEqual([]);
   });
 }
 
 test('build mode selection describes what was picked', async ({ page, base }) => {
-  await openGame(page, base, 'meridian-city', '?build=1');
-  const text = await page.evaluate(() => {
+  const game = await openGame(page, base, 'meridian-city', '?build=1');
+  const text = await game.evaluate(() => {
     const { select } = window.__game;
     const e = select.items.find((i) => i.kind === 'building') || select.items[0];
     select.select(e);
     return window.__harness.getSelection();
   });
   expect(text).toMatch(/^\[Selected object: \w+.* centered at x=-?[\d.]+, y=-?[\d.]+, z=-?[\d.]+, size [\d.]+ x [\d.]+ x [\d.]+ m/);
+  // the studio's composer picks the selection up over the bridge
+  await expect(page.locator('.dc-chip-sel')).toContainText('Selected');
 });
 
 test('tweak save writes tweaks.json', async ({ page, base }) => {
   await withTempProject(page, base, async (slug) => {
-    await openGame(page, base, slug, '?build=1');
-    const key = await page.evaluate(() => [...window.__game.tweaks.defs.values()].find((d) => !d.engine && d.save !== false)?.key);
+    const game = await openGame(page, base, slug, '?build=1');
+    const key = await game.evaluate(() => [...window.__game.tweaks.defs.values()].find((d) => !d.engine && d.save !== false)?.key);
     expect(key).toBeTruthy();
     const res = await api(page, '/tweaks', { slug, values: { [key]: '#123456' } });
     expect(res.status).toBe(200);
@@ -85,13 +87,13 @@ test('tweak save writes tweaks.json', async ({ page, base }) => {
 
 test('a prompt checkpoints, edits, reloads in place, and restore undoes it', async ({ page, base }) => {
   await withTempProject(page, base, async (slug) => {
-    await openGame(page, base, slug, '?build=1');
-    await markWindow(page);
+    const game = await openGame(page, base, slug, '?build=1');
+    await markWindow(game);
     const res = await api(page, `/chat/${slug}/prompt`, { text: 'make it rain' });
     expect(res.status).toBe(200);
-    await waitForReload(page);
-    await expect(page.locator('#toast')).toContainText('Changes applied');
-    expect(await page.evaluate(() => window.__game.state)).toBe('build');
+    await waitForReload(game);
+    await expect(game.locator('#toast')).toContainText('Changes applied');
+    expect(await game.evaluate(() => window.__game.state)).toBe('build');
     expect(gameFile(slug)).toContain('// fake-agent: make it rain');
 
     // the chat panel shows the turn
@@ -103,9 +105,9 @@ test('a prompt checkpoints, edits, reloads in place, and restore undoes it', asy
     expect(diff.files).toEqual([{ path: 'game.js', additions: 1, deletions: 0 }]);
     expect(diff.patch).toContain('+// fake-agent: make it rain');
 
-    await markWindow(page);
+    await markWindow(game);
     expect((await api(page, `/chat/${slug}/restore`, { id: cps[0].id })).status).toBe(200);
-    await waitForReload(page);
+    await waitForReload(game);
     expect(gameFile(slug)).not.toContain('fake-agent');
     const { body: after } = await api(page, `/chat/${slug}/checkpoints`);
     expect(after[0].prompt).toBe('Before restoring: make it rain');
@@ -142,13 +144,13 @@ test('engine reloads are scoped: a game edit reloads only that game', async ({ p
   test.setTimeout(120_000);
   await withTempProject(page, base, async (slug) => {
     const other = await context.newPage();
-    await test.step('open meridian', () => openGame(other, base, 'meridian-city', '?build=1'));
-    await markWindow(other);
-    await test.step('open temp', () => openGame(page, base, slug, '?build=1'));
-    await markWindow(page);
+    const otherGame = await openGame(other, base, 'meridian-city', '?build=1');
+    await markWindow(otherGame);
+    const game = await openGame(page, base, slug, '?build=1');
+    await markWindow(game);
     await api(page, `/chat/${slug}/prompt`, { text: 'scoped edit' });
-    await test.step('wait reload', () => waitForReload(page));
-    expect(await other.evaluate(() => window.__e2eMarker)).toBe(true);
+    await waitForReload(game);
+    expect(await otherGame.evaluate(() => window.__e2eMarker)).toBe(true);
     await other.close();
   });
 });

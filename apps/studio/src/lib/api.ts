@@ -8,7 +8,7 @@ export const DEV = import.meta.env.DEV;
 export const api = studioClient();
 
 // Navigate in place (never new tabs): the desktop app doesn't open windows.
-export const playUrl = (slug: string, build = false) => (DEV ? `/play/${slug}${build ? '?build=1' : ''}` : `play.html?game=${slug}${build ? '&build=1' : ''}`);
+export const playUrl = (slug: string, build = false) => (DEV ? `/p/${slug}${build ? '?build=1' : ''}` : `play.html?game=${slug}${build ? '&build=1' : ''}`);
 
 async function ok<T>(res: Promise<Response>): Promise<T> {
   const r = await res;

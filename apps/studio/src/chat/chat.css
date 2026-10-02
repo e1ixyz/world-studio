@@ -1,4 +1,5 @@
-/* The Claude panel, quick prompt bar and status pill. Tokens in engine/ui/tokens.css. */
+/* The Ask panel and its status pill, over the right edge of the game frame. Shared tokens and
+   .ws-btn / .ws-icon come from engine/ui/tokens.css, so the panel matches build mode. */
 .dc-root { font-family: var(--ws-font); color: var(--ws-ink); }
 .dc-root h2, .dc-root h3, .dc-root p { margin: 0; }
 .dc-root .hidden { display: none !important; }
@@ -144,18 +145,6 @@
 .dc-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
 .dc-keys { font-size: 12px; color: var(--ws-faint); }
 
-/* quick prompt bar (Enter in play mode) */
-.dc-quick {
-  position: fixed; z-index: 62; left: 50%; bottom: 64px; transform: translate(-50%, 12px); width: min(620px, calc(100vw - 32px));
-  display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--ws-panel); border: 1px solid var(--ws-accent-line);
-  box-shadow: var(--ws-shadow); backdrop-filter: blur(10px);
-  opacity: 0; visibility: hidden; transition: opacity 0.12s, transform 0.12s, visibility 0s 0.12s;
-}
-.dc-root.quick-open .dc-quick { opacity: 1; visibility: visible; transform: translate(-50%, 0); transition: opacity 0.12s, transform 0.12s; }
-.dc-quick-label { font-size: 13px; font-weight: 700; color: var(--ws-accent); }
-.dc-quick input { flex: 1; min-width: 0; padding: 4px 0; font-family: var(--ws-font); font-size: 16px; color: var(--ws-ink); background: transparent; border: 0; outline: none; user-select: text; }
-.dc-quick input::placeholder { color: var(--ws-faint); }
-
 /* status pill while the panel is closed */
 .dc-feed {
   position: fixed; z-index: 60; left: 24px; bottom: 44px; display: flex; align-items: center; gap: 10px;
@@ -171,10 +160,10 @@
 .dc-feed-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .dc-feed.err { border-color: var(--ws-danger-line); color: #ffd6cf; }
 
-/* keep the play HUD visible beside the open panel */
-body.devchat-open #mapwrap, body.devchat-open #speedo, body.devchat-open #flight { right: calc(var(--ws-right-w) + 22px); transition: right 0.2s var(--ws-ease); }
-
 @keyframes dc-rot { to { transform: rotate(360deg); } }
 @keyframes dc-pulse { from { opacity: 0.4; } to { opacity: 1; } }
 
 .dc-cp-delta { white-space: nowrap; }
+
+/* the game fills the studio page under the panel */
+.dc-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #05080d; }

@@ -24,7 +24,7 @@ Check the change against each item.
 2. Storage. localStorage and sessionStorage belong to the browser profile as well as the origin, so the browser and the app don't share them even on the same port (build-mode tips, the props-collapsed flag, the camera-context toggle, hot-reload snapshots). That's fine for per-window conveniences. Anything both sides must see goes through the harness into `.harness/` or the game folder.
 3. Environment. The daemon's environment is whoever started it: the terminal's, or the app's. A Finder launch has none of the shell's exports. `fixPath()` copies PATH and `DEVCHAT_*` from the login shell and nothing else (`SHELL_VARS` in `apps/desktop/main.js`), then forks the daemon with that environment. A new environment variable the server reads must be added to `SHELL_VARS`, or it will work from the terminal and silently do nothing in an app-started daemon. New binaries the server spawns must be on the login shell's PATH.
 4. Renderer. The app window is sandboxed Chromium with context isolation and no preload: no `require`, no `process`, no Node APIs. Client code stays plain browser JS. Anything that needs the file system or a process goes through a route on the daemon's API (`packages/server/src/app.ts`, served at `/__harness` and `/api`), which both sides share. Don't add Electron-only IPC for a feature the browser also needs.
-5. Windows and links. In the app, links to other sites open in the default browser, and `window.open` or `target="_blank"` never opens a window, even on the same origin. Navigate in place (`location.href = ...`) instead of opening tabs.
+5. Windows and links. In the app, links to other sites open in the default browser, and `window.open` or `target="_blank"` never opens a window, even on the same origin. Navigate in place (`location.href = ...`) instead of opening tabs. Inside the game frame, navigate the studio instead (`window.top.location`, or a plain link, which the bridge agent's `<base target="_top">` sends to the top).
 6. Dialogs. `alert` and `confirm` work in both (the chat's Restore uses them). `window.prompt()` doesn't exist in Electron. Use an in-page dialog like the landing page's.
 7. Keyboard. The app's default menu takes Cmd+Q, Cmd+W, Cmd+R, Cmd+Shift+R, Cmd+M, Cmd+H, Cmd+Option+I, Cmd+0, Cmd+plus and Cmd+minus, Ctrl+Cmd+F, Cmd+C/V/X/A/Z and Cmd+Shift+Z. The browser takes Cmd+T, Cmd+L, Cmd+N and Cmd+W. Game and build-mode keys stay off Cmd and Ctrl combos (Ctrl is unbound on purpose).
 8. Permissions. Electron grants camera, microphone, notification and clipboard requests without asking. The browser prompts and can refuse. Handle refusal anyway.
@@ -42,10 +42,10 @@ Run what the change touches, in both.
 
 1. `npx vite build` compiles, and `bun run test` and `bun run typecheck` pass.
 2. Both sides at once: `bun run test:e2e` runs the Playwright suite in `e2e/` against a private web daemon and a private app daemon (`WORLD_STUDIO_ISOLATED=1`), with the fake agent `scripts/fake-claude.mjs` standing in for `claude`. Add a test there for whatever the change touches.
-3. Web by hand: run `bun run dev` in the background, read the URL from `.harness/daemon.json`, and drive it with the Playwright MCP tools. `window.__game` and `window.__harness` expose state (HANDOFF.md, "Run and verify").
+3. Web by hand: run `bun run dev` in the background, read the URL from `.harness/daemon.json`, and drive it with the Playwright MCP tools. A project is `/p/<slug>`: the studio page, with the game in an iframe. `window.__game` and `window.__harness` live in that frame (`document.querySelector('iframe').contentWindow.__game` from the page). See HANDOFF.md, "Run and verify".
 4. App by hand: run `npx electron . --remote-debugging-port=9333` in the background. It attaches to the daemon from step 3 if one is running. Use `scripts/cdp.mjs` from this skill:
-   - `node .claude/skills/parity/scripts/cdp.mjs nav /play/meridian-city?build=1`
-   - `node .claude/skills/parity/scripts/cdp.mjs eval "JSON.stringify(window.__game.state)"`
+   - `node .claude/skills/parity/scripts/cdp.mjs nav /p/meridian-city?build=1`
+   - `node .claude/skills/parity/scripts/cdp.mjs eval "JSON.stringify(document.querySelector('iframe').contentWindow.__game.state)"`
    - `node .claude/skills/parity/scripts/cdp.mjs shot <scratchpad>/app.png`
 
    Run the same checks you ran in the browser and compare the results. Screenshots need the window visible on screen. If `shot` times out, the window is covered, and `eval` still works.

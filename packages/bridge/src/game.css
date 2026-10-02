@@ -1,0 +1,17 @@
+/* Studio pieces that live inside the game page. */
+
+/* quick prompt bar (Enter in play or build mode): in the game page so pointer lock survives */
+.dc-quick {
+  position: fixed; z-index: 62; left: 50%; bottom: 64px; transform: translate(-50%, 12px); width: min(620px, calc(100vw - 32px));
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--ws-panel); border: 1px solid var(--ws-accent-line);
+  box-shadow: var(--ws-shadow); backdrop-filter: blur(10px); font-family: var(--ws-font); color: var(--ws-ink);
+  opacity: 0; visibility: hidden; transition: opacity 0.12s, transform 0.12s, visibility 0s 0.12s;
+}
+.dc-quick.open { opacity: 1; visibility: visible; transform: translate(-50%, 0); transition: opacity 0.12s, transform 0.12s; }
+.dc-quick-label { font-size: 13px; font-weight: 700; color: var(--ws-accent); }
+.dc-quick input { flex: 1; min-width: 0; padding: 4px 0; font-family: var(--ws-font); font-size: 16px; color: var(--ws-ink); background: transparent; border: 0; outline: none; user-select: text; }
+.dc-quick input::placeholder { color: var(--ws-faint); }
+
+/* The Ask panel sits over the right edge of the frame: keep the play HUD visible beside it. Build
+   mode's own layout reads the same body class (engine/build/build.css). */
+body.devchat-open #mapwrap, body.devchat-open #speedo, body.devchat-open #flight { right: calc(var(--ws-right-w) + 22px); transition: right 0.2s var(--ws-ease); }

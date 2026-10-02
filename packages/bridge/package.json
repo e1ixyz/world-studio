@@ -1,0 +1,13 @@
+{
+  "name": "@ws/bridge",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/protocol.ts",
+    "./game-agent": "./src/game-agent.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}

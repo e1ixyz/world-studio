@@ -1,0 +1,58 @@
+// The studio shell and the game it frames talk only through these postMessage messages. Both
+// sides validate what they receive, and nothing reaches into the other window directly, so the
+// game page could later be served from a separate (sandboxed) origin without changing either side.
+import { z } from 'zod';
+
+export const BRIDGE = 'world-studio';
+export const BRIDGE_VERSION = 1;
+
+const envelope = { bridge: z.literal(BRIDGE), v: z.literal(BRIDGE_VERSION) };
+const Mode = z.enum(['menu', 'play', 'build', 'paused', 'map']).or(z.string());
+
+// game -> studio
+export const GameMessage = z.discriminatedUnion('t', [
+  z.object({ ...envelope, t: z.literal('ready'), slug: z.string(), title: z.string().optional() }),
+  // sent whenever the mode or the build-mode selection changes
+  z.object({ ...envelope, t: z.literal('state'), mode: Mode.nullable(), selection: z.string(), canShoot: z.boolean() }),
+  z.object({ ...envelope, t: z.literal('open'), focus: z.boolean() }),
+  z.object({ ...envelope, t: z.literal('close') }),
+  z.object({ ...envelope, t: z.literal('toggle') }),
+  z.object({ ...envelope, t: z.literal('focusComposer') }),
+  z.object({ ...envelope, t: z.literal('shot'), path: z.string(), thumb: z.string() }),
+  z.object({ ...envelope, t: z.literal('error'), text: z.string() }),
+  z.object({ ...envelope, t: z.literal('quickPrompt'), text: z.string() }),
+  z.object({ ...envelope, t: z.literal('context'), id: z.number(), text: z.string() }),
+]);
+export type GameMessage = z.infer<typeof GameMessage>;
+
+// studio -> game
+export const StudioMessage = z.discriminatedUnion('t', [
+  z.object({ ...envelope, t: z.literal('panel'), open: z.boolean() }),
+  // the studio's text box has focus: the game drops held keys and doesn't pause on losing pointer lock
+  z.object({ ...envelope, t: z.literal('typing'), on: z.boolean() }),
+  z.object({ ...envelope, t: z.literal('requestContext'), id: z.number() }),
+  z.object({ ...envelope, t: z.literal('screenshot') }),
+  z.object({ ...envelope, t: z.literal('exitPointerLock') }),
+]);
+export type StudioMessage = z.infer<typeof StudioMessage>;
+
+type Body<M> = M extends unknown ? Omit<M, 'bridge' | 'v'> : never;
+export type GameMessageBody = Body<GameMessage>;
+export type StudioMessageBody = Body<StudioMessage>;
+
+export function send<M extends GameMessageBody | StudioMessageBody>(target: Window | null | undefined, msg: M, origin: string) {
+  target?.postMessage({ bridge: BRIDGE, v: BRIDGE_VERSION, ...msg }, origin);
+}
+
+// Listen for messages of one schema from one window and origin. Returns a function that stops listening.
+export function listen<S extends z.ZodType>(from: () => Window | null | undefined, origin: string, schema: S, handler: (m: z.infer<S>) => void) {
+  const onMessage = (e: MessageEvent) => {
+    if (e.source !== from() || e.origin !== origin) return;
+    if ((e.data as { bridge?: string })?.bridge !== BRIDGE) return;
+    const parsed = schema.safeParse(e.data);
+    if (parsed.success) handler(parsed.data);
+    else console.warn('World Studio bridge: dropped a malformed message', e.data, parsed.error.issues);
+  };
+  window.addEventListener('message', onMessage);
+  return () => window.removeEventListener('message', onMessage);
+}

@@ -25,6 +25,7 @@
       "dependencies": {
         "@tanstack/react-query": "^5.104.1",
         "@tanstack/react-router": "^1.170.41",
+        "@ws/bridge": "workspace:*",
         "@ws/server": "workspace:*",
         "@ws/shared": "workspace:*",
         "class-variance-authority": "^0.7.1",
@@ -50,6 +51,13 @@
       "version": "0.0.0",
       "peerDependencies": {
         "three": "^0.186.1",
+      },
+    },
+    "packages/bridge": {
+      "name": "@ws/bridge",
+      "version": "0.0.0",
+      "dependencies": {
+        "zod": "^4.6.5",
       },
     },
     "packages/server": {
@@ -461,6 +469,8 @@
     "@vitest/mocker": ["@vitest/mocker@5.0.3", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.31", "@vitest/spy": "5.0.3", "estree-walker": "^3.0.3", "magic-string": "^1.2.3" }, "peerDependencies": { "msw": "^2.4.9", "vite": "^6.0.0 || ^7.0.0 || ^8.0.0" }, "optionalPeers": ["msw", "vite"] }, "sha512-T8sWAIbkSyAjkwTcaEc3Iu0o9A27X1/kdXrizhZkGuSKScRQtRzclfAMpOTcGdXCsqxeWlpGy3XjqaW8CpLORg=="],
 
     "@vitest/spy": ["@vitest/spy@5.0.3", "", {}, "sha512-XhFysQTB8AZ+P4gMi+Lpo99vg2AZi0qKpaB9yXQl37+CaMEAPO3iH/wGVnSyL5MPERiLezpqTVtrR6UZH5GCXg=="],
+
+    "@ws/bridge": ["@ws/bridge@workspace:packages/bridge"],
 
     "@ws/engine": ["@ws/engine@workspace:engine"],
 

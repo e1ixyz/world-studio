@@ -59,9 +59,9 @@ bun run lint         # Biome (games/ and templates/ are excluded)
 - The daemon listens on 5173 or the next free port and writes the real URL to `.harness/daemon.json`. Use that URL, or the one the terminal prints.
 - `bun run dev:vite` still starts plain Vite with the harness plugin, without the daemon or its lock. Use it only for debugging.
 - `vite.config.js` sets `appType: 'mpa'` with two inputs, `index.html` (landing) and `play.html` (game runtime), turns the HMR error overlay off so it doesn't cover the chat panel, and keeps `.harness/` out of the file watcher.
-- In dev, games open at `/play/<slug>`. The plugin rewrites that URL to `play.html` (`studioPlugin` in `packages/server/src/vite/plugin.ts`). In production the landing page links to `play.html?game=<slug>` instead.
+- In dev, projects open at `/p/<slug>`, the studio shell, with the game framed at `/play/<slug>?embed=1`; `studioPlugin` (`packages/server/src/vite/plugin.ts`) rewrites that to `play.html`, and a bare `/play/<slug>` redirects to the shell. In production the landing page links to `play.html?game=<slug>` instead.
 - Before calling a change done: `npx vite build` must compile, and the game must load and play in a browser.
-- `window.__game` (`engine/runtime.js:398`) exposes `app`, `ctx`, `game`, `player`, `env`, `camera`, `select`, `tweaks`, `build`, `input`, `start(mode)`, `setMode(mode)` and a `state` getter. Playwright uses it to drive and inspect games. `window.__harness` (`engine/runtime.js:399`) carries the slug, the game's metadata and the current selection text for the chat client.
+- `window.__game` (`engine/runtime.js:398`) exposes `app`, `ctx`, `game`, `player`, `env`, `camera`, `select`, `tweaks`, `build`, `input`, `start(mode)`, `setMode(mode)` and a `state` getter. Playwright uses it to drive and inspect games. It lives in the game frame: in the shell, use `document.querySelector('iframe').contentWindow.__game`, or in Playwright the frame from `gameFrame(page)` in `e2e/fixtures.js`. `window.__harness` (`engine/runtime.js:399`) carries the slug, the game's metadata and the current selection text for the chat client.
 
 ## Studio daemon: `packages/server/`
 
@@ -117,9 +117,8 @@ One Node process per checkout owns the harness: chats, agent jobs, checkpoints a
 
 The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Every phase keeps the three games and both surfaces working.
 
-- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`), P4 (git checkpoints with diffs), P5 (Agent SDK runner, engine types, `check_game`, `env.setSky()`), P6a (React studio with the landing page).
+- Done: P0 (tests and the fake agent), P1 (bun workspace, `@ws/engine`, `packages/shared` schemas), P2 (one studio daemon, `apps/desktop`), P3 (Hono API and domain modules, replacing `harness/server/plugin.js`), P4 (git checkpoints with diffs), P5 (Agent SDK runner, engine types, `check_game`, `env.setSky()`), P6a (React studio with the landing page), P6b (project shell: game frame, bridge, React Ask panel).
 - Next:
-  - P6b: the project shell at `/p/$slug`: the game in an iframe, a typed postMessage bridge, and the chat in React.
   - P7: build panels in React, live-game MCP tools and permission prompts.
   - P8: PGlite + Drizzle database and the play-only export.
 - Open follow-up: `games/meridian-city/game.js` still sets the Sky shader's uniforms directly for its Sky tweaks. That code is in uncommitted work on the game, so it was left alone; switch it to `ctx.env.setSky()`.
@@ -131,9 +130,8 @@ The plan was approved 2026-10-01 (local-first and cloud-ready, incremental). Eve
 engine/      shared runtime every game runs on
 games/       one folder per project (games/<slug>/)
 templates/   starting points copied into games/<slug>/ on create
-harness/     dev-only browser code: the in-game chat (harness/client)
-packages/    server (studio daemon, API, domain), shared (zod schemas)
-apps/studio/ React studio UI (landing page; project shell next)
+packages/    server (studio daemon, API, domain), shared (zod schemas), bridge (studio <-> game frame)
+apps/studio/ React studio UI: landing page, project shell, Ask panel
 apps/desktop/ Electron shell for the macOS app
 test/unit/   Vitest unit tests;  e2e/  Playwright suite (web + Electron)
 scripts/     fake-claude.mjs (stand-in agent for tests)
@@ -183,10 +181,6 @@ CLAUDE.md    project instructions for Claude: run the parity skill before finish
 
 Templates are copied, never linked. See Gotchas.
 
-### `harness/`
-
-- `client/chat.js`, `client/chat.css` - the in-game chat panel, injected into play pages in dev.
-
 ### `.harness/`
 
 - `settings.json` - studio-wide settings, currently only `alwaysEngine`. Both the browser dev server and the desktop app read it fresh on every prompt.
@@ -223,7 +217,7 @@ The old single-file Vite plugin is gone, replaced by:
   - `agent/`: the `AgentRunner` interface and `CliRunner`.
 - `app.ts`: the Hono API.
 - `middleware/`: `localOnly`, and `body(schema)`, which validates JSON bodies with the zod schemas from `@ws/shared`.
-- `vite/plugin.ts`: `studioPlugin(studio)`, the Vite adapter. It mounts the API, rewrites `/play/<slug>`, injects the chat client, feeds `hotUpdate` into the reload coordinator, and forwards studio events as HMR custom events.
+- `vite/plugin.ts`: `studioPlugin(studio)`, the Vite adapter. It mounts the API, serves `/p/<slug>` from the studio app, rewrites `/play/<slug>?embed=1` (and redirects a bare one), injects the bridge agent, feeds `hotUpdate` into the reload coordinator, and forwards studio events as HMR custom events.
 - `client.ts`: `studioClient()`, a typed `hono/client` for TS callers. `client.typetest.ts` checks at compile time that it sees the routes and bodies.
 
 `vite.config.js` no longer loads any plugin itself; the daemon adds `studioPlugin` inline.
@@ -318,25 +312,51 @@ Git history, kept out of the user's own repository (`domain/checkpoints/git.ts`,
 
 Each prompt is a real Claude Code run billed to the user's account. A tiny edit on the old single-game setup cost about $0.37. The chat shows the run time in its "Done" line. The cost is saved on the `done` item in `chat.json` but not shown.
 
-## Chat client: `harness/client/chat.js`
+## Project shell and Ask panel: `apps/studio/src/routes/p.$slug.tsx`, `packages/bridge/`
 
-- `transformIndexHtml` injects it only into play pages, with `head-prepend` (the plugin's `transformIndexHtml`). It loads before the game and keeps working when the game crashes.
-- Backtick toggles the Ask panel. The "Ask" tab on the right edge does too. The panel has Chat and Checkpoints tabs and a ⋯ menu.
-- Enter in play or build mode opens a one-line quick prompt bar and keeps pointer lock.
-- A status pill in the bottom-left shows progress while the panel is closed.
-- The panel opens by itself when you enter build mode and closes when you leave (`engine/runtime.js:151`, `engine/runtime.js:163`).
-- Chips above the text box show what goes with the prompt:
-  - the "Camera view" / "My position" toggle (on by default), which prepends `[Game context: ...]`. In build mode it describes the free camera, otherwise the player;
-  - the current build-mode selection (dismissable with ×);
-  - a screenshot ("Attach view", or K in build mode);
-  - "Engine edits: all games" when armed for one prompt, or "Engine edits: always on" (no ×) while the setting is on.
-- "Allow engine edits" in the ⋯ menu allows engine edits for the next prompt only, and turns itself off after each send.
-- "Always allow engine edits" in the same menu turns on the studio-wide `alwaysEngine` setting. While it's on, the one-prompt item is hidden. The client reloads the setting when the menu opens and when the window gets focus, because the browser and the app run separate servers and only the server that saved it sends the live event.
-- Each turn's tool calls collapse into one "N steps" row. Earlier messages in a turn are dimmed as progress notes. While Claude works, a card above the composer shows the latest step, the elapsed time and Stop, and Send is disabled.
-- The Checkpoints tab has "Undo last prompt", then every checkpoint newest first, each with Restore.
-- An empty chat shows three example prompts; one adapts to the selected object's kind.
-- Window errors, unhandled rejections, failed script loads and `vite:error` show as error cards with an "Fix it" button, and the panel opens by itself (`harness/client/chat.js:415`).
-- Game controls pause only while a chat text box has focus. The client dispatches `devchat:focus` / `devchat:blur`, and the runtime and `Input` drop held keys.
+A project opens at `/p/<slug>`: the studio page with the game framed full-size underneath (`/play/<slug>?embed=1`) and the Ask panel over the right edge.
+
+- A bare `/play/<slug>` redirects to `/p/<slug>`, keeping the query. `/p/<slug>?build=1` passes `build=1` through to the frame.
+- The panel lives outside the game document, so it keeps working, and keeps its scroll position and draft, when the game reloads or crashes.
+- The page title is "<project name> · World Studio" (the app window's title).
+
+The bridge (`packages/bridge/`):
+
+- `protocol.ts`: zod-checked, versioned postMessage messages.
+  - Game to studio: `ready`, `state` (mode, selection text, whether a screenshot is possible), `open`, `close`, `toggle`, `focusComposer`, `shot`, `error`, `quickPrompt`, `context`.
+  - Studio to game: `panel`, `typing`, `requestContext`, `screenshot`, `exitPointerLock`.
+  - Both sides check the source window and origin. Nothing reaches into the other window, so the game could later move to a sandboxed origin.
+- `game-agent.ts`: injected at the top of every framed play page by `studioPlugin`, before the game, so it survives a crash.
+  - It keeps the interface the engine already calls, `window.devchat` (`open`, `close`, `focusComposer`, `attach`, `reportError`, `isOpen`), and reads `window.__harness`. The engine itself didn't change for the shell.
+  - It owns what must stay in the game document:
+    - the quick prompt bar (Enter in play or build mode keeps pointer lock),
+    - backtick and Enter while the game has focus,
+    - error capture (window errors, unhandled rejections, failed script loads, `vite:error`),
+    - `[Game context: …]`,
+    - the `devchat-open` body class that build mode's layout uses.
+  - It adds `<base target="_top">`, so in-game links (Projects, All projects) navigate the studio, not the frame. The HUD's fatal-error button uses `window.top`.
+  - `game.css` holds the quick bar and the HUD offset.
+
+The Ask panel (`apps/studio/src/chat/`):
+
+- It ports the old `harness/client/chat.js` feature for feature and keeps its class names and `chat.css`, so it looks the same.
+- `timeline.ts` (unit tested) turns the log into blocks: each turn's tools collapse into one "N steps" row, and when a turn ends, earlier texts dim as progress notes.
+- `use-chat.ts` streams `/api/chat/<slug>/events`. `use-game-bridge.ts` is the studio end of the bridge, including the context request with its 600 ms timeout.
+- Chips above the text box:
+  - "Camera view" / "My position", on by default (localStorage `devchat:camera-context`),
+  - the build-mode selection, with ×,
+  - a screenshot ("Attach view", or K in build mode),
+  - "Engine edits: all games" (one prompt) or "Engine edits: always on".
+- The ⋯ menu has "Allow engine edits" (next prompt), "Always allow engine edits" (the studio setting) and "New conversation".
+- The Checkpoints tab shows "Undo last prompt", then every checkpoint with Restore and its change counts.
+- While Claude works, a card shows the latest step, the elapsed time and Stop. The status pill shows progress while the panel is closed. An empty chat shows three example prompts.
+- Errors from the game show as error cards with "Fix it", deduped, and open the panel.
+- Keys:
+  - Backtick toggles the panel from the game or the studio.
+  - Focusing the composer sends `typing` to the game first, so losing pointer lock reads as typing, not as a pause.
+  - Esc in the composer blurs it during play or build, and closes the panel otherwise.
+  - After a send in play mode, focus goes back to the game frame (click to re-lock the pointer).
+- Panel open/closed is remembered per project in sessionStorage.
 
 ## Studio UI: `apps/studio/`
 

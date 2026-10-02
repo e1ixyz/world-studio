@@ -120,7 +120,7 @@ export class HUD {
   }
 
   fatal(title, detail) {
-    this.menu({ title, tag: detail, button: 'Back to projects', controls: [], onPlay: () => (location.href = '/') });
+    this.menu({ title, tag: detail, button: 'Back to projects', controls: [], onPlay: () => ((window.top || window).location.href = '/') });
   }
 
   update(dt, { player, env, prompt, camYaw, build }) {

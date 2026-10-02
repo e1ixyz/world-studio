@@ -48,20 +48,28 @@ export async function api(pageOrBase, route, body) {
   return { status: res.status, body: await res.json().catch(() => null) };
 }
 
+// Opens a project in the studio shell and returns the game's frame (where window.__game lives).
 export async function openGame(page, base, slug, query = '') {
-  await page.goto(`${base}/play/${slug}${query}`, DOM);
-  await page.waitForFunction(() => window.__game?.state, null, { timeout: 30_000, polling: 100 });
+  await page.goto(`${base}/p/${slug}${query}`, DOM);
+  const frame = await gameFrame(page);
+  await frame.waitForFunction(() => window.__game?.state, null, { timeout: 30_000, polling: 100 });
+  return frame;
+}
+
+export async function gameFrame(page) {
+  const handle = await page.waitForSelector('iframe[data-testid=game-frame]', { timeout: 30_000 });
+  return handle.contentFrame();
 }
 
 export const readChat = (slug) => JSON.parse(fs.readFileSync(path.join(ROOT, '.harness/projects', slug, 'chat.json'), 'utf8'));
 export const gameFile = (slug, file = 'game.js') => fs.readFileSync(path.join(ROOT, 'games', slug, file), 'utf8');
 
-// Wait for the runtime's in-place reload: the marker set on the old window disappears and the
-// new runtime is back up.
-export async function waitForReload(page) {
-  await page.waitForFunction(() => !window.__e2eMarker && window.__game?.state, null, { timeout: 30_000, polling: 100 });
+// Wait for the game's in-place reload inside its frame: the marker set on the old window
+// disappears and the new runtime is back up.
+export async function waitForReload(frame) {
+  await frame.waitForFunction(() => !window.__e2eMarker && window.__game?.state, null, { timeout: 30_000, polling: 100 });
 }
-export const markWindow = (page) => page.evaluate(() => { window.__e2eMarker = true; });
+export const markWindow = (frame) => frame.evaluate(() => { window.__e2eMarker = true; });
 
 // A throwaway project from the blank template, deleted (moved to .harness/trash) afterwards.
 export async function withTempProject(page, base, fn) {
