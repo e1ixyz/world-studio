@@ -64,7 +64,7 @@ bun run export <slug>  # one game as a static site in exports/<slug>/
 - `vite.config.js` sets `appType: 'mpa'` with two inputs, `index.html` (landing) and `play.html` (game runtime), turns the HMR error overlay off so it doesn't cover the chat panel, and keeps `.harness/` out of the file watcher.
 - In dev, projects open at `/p/<slug>`, the studio shell, with the game framed at `/play/<slug>?embed=1`; `studioPlugin` (`packages/server/src/vite/plugin.ts`) rewrites that to `play.html`, and a bare `/play/<slug>` redirects to the shell. In production the landing page links to `play.html?game=<slug>` instead.
 - Before calling a change done: `npx vite build` must compile, and the game must load and play in a browser.
-- `window.__game` (`engine/runtime.js:398`) exposes `app`, `ctx`, `game`, `player`, `env`, `camera`, `select`, `tweaks`, `build`, `input`, `start(mode)`, `setMode(mode)` and a `state` getter. Playwright uses it to drive and inspect games. It lives in the game frame: in the shell, use `document.querySelector('iframe').contentWindow.__game`, or in Playwright the frame from `gameFrame(page)` in `e2e/fixtures.js`. `window.__harness` (`engine/runtime.js:399`) carries the slug, the game's metadata and the current selection text for the chat client.
+- `window.__game` (`engine/runtime.js:406`) exposes `app`, `ctx`, `game`, `player`, `env`, `camera`, `select`, `tweaks`, `build`, `input`, `start(mode)`, `setMode(mode)` and a `state` getter. Playwright uses it to drive and inspect games. It lives in the game frame: in the shell, use `document.querySelector('iframe').contentWindow.__game`, or in Playwright the frame from `gameFrame(page)` in `e2e/fixtures.js`. `window.__harness` (`engine/runtime.js:407`) carries the slug, the game's metadata and the current selection text for the chat client.
 
 ## Studio daemon: `packages/server/`
 
@@ -222,12 +222,12 @@ Templates are copied, never linked. See Gotchas.
 
 A game's `setup(ctx)` builds its world into `ctx.scene` and returns `{ world, update, ... }`. The engine owns the camera, player, sky, HUD, audio, build mode and reloads. Everything a game receives and can return, plus the tweak and select hooks, is in [engine/API.md](engine/API.md).
 
-The runtime adds its own tweaks after the game's, so the game's show first in the panel (`engine/runtime.js:94`):
+The runtime adds its own tweaks after the game's, so the game's show first in the panel (`engine/runtime.js:101`):
 
 - World: time of day, day length, fog density, exposure, bloom.
 - Player: walk, sprint, fly and fast fly speeds.
 
-`ctx.rng` is seeded from the project slug (`engine/runtime.js:77`).
+`ctx.rng` is seeded from the project slug (`engine/runtime.js:82`).
 
 ## Studio server: `packages/server/src/`
 
@@ -336,7 +336,7 @@ Git history, kept out of the user's own repository (`domain/checkpoints/git.ts`,
 - The plugin's `hotUpdate` hook hands every file event to `ReloadCoordinator.fileChanged()`, which takes over reloads for code files in `games/` and `engine/` (`.js`, `.mjs`, `.json`, `.html`, `.glsl`, `.frag`, `.vert`) and returns `[]`, so Vite does no reload of its own.
 - A changed file in `games/<slug>/` queues a reload for that slug. A changed file in `engine/` queues one for every tab.
 - While any Claude job runs, in any project, queued reloads wait. When the last job ends, `flush()` (via a `ModuleInvalidator` the plugin provides over Vite's module graph) invalidates the changed modules, logs a reload line in the chat and sends one `harness:reload` with `{ slugs: [...] }` or `{ all: true }`. With no job running, a change flushes after a 180 ms debounce.
-- The runtime checks the slug and reloads only matching tabs (`engine/runtime.js:390`).
+- The runtime checks the slug and reloads only matching tabs (`engine/runtime.js:398`).
 - `game.json`, `tweaks.json` and `thumb.jpg` never reload a game. A `game.json` change only refreshes the landing page.
 
 ### Security
@@ -444,8 +444,8 @@ How it behaves:
 
 ## Hot reload
 
-- On `harness:reload` (and on Vite's own `vite:beforeFullReload`), the runtime saves a snapshot to sessionStorage (`engine/runtime.js:349`): mode, Freeze, time of day, quality, player position/yaw/pitch/flying, the car if driving, the build camera pose and `game.snapshot()`.
-- On boot it restores a snapshot younger than 2 minutes, puts you back in the car if you were driving, returns you to play or build mode and toasts "Changes applied" (`engine/runtime.js:384`).
+- On `harness:reload` (and on Vite's own `vite:beforeFullReload`), the runtime saves a snapshot to sessionStorage (`engine/runtime.js:356`): mode, Freeze, time of day, quality, player position/yaw/pitch/flying, the car if driving, the build camera pose and `game.snapshot()`.
+- On boot it restores a snapshot younger than 2 minutes, puts you back in the car if you were driving, returns you to play or build mode and toasts "Changes applied" (`engine/runtime.js:369`).
 - Audio waits for the next click or keypress, since browsers need a gesture.
 
 ## Meridian City: `games/meridian-city/`
@@ -456,7 +456,7 @@ A procedurally generated island city you walk, drive and fly through while colle
 - Edges: a promenade and seawall, ocean around the island, and the engine's ring of mountains 2.1-5.6 km out (`engine/world/scenery.js:70`).
 - Traffic: about 420 AI cars on a road-node graph with bezier turns, plus parked cars. AI cars stop for obstacles and the player, honk when blocked, and ghost through whatever is in the way after 7 s stuck (`games/meridian-city/vehicles.js:216`).
 - Pedestrians: about 900, looping around sidewalks.
-- Sky and light (engine): a day lasts 12 real minutes (`engine/world/environment.js:18`). The PMREM environment map regenerates every 5 game-seconds (`engine/world/environment.js:142`).
+- Sky and light (engine): a day lasts 12 real minutes (`engine/world/environment.js:18`). The PMREM environment map regenerates every 5 game-seconds (`engine/world/environment.js:155`).
 - Game: 40 cores with beams visible from afar, a timer, a win screen. Cars can be entered with E. Rotating minimap plus a full map.
 - Textures are canvas-generated and audio is synthesized. There are no asset files.
 - Files: `city.js` (`buildCity()`), `vehicles.js`, `peds.js`, `cores.js`, `map.js` (minimap image), `textures.js` (facade atlases and city textures), `config.js`, `rng.js`, and `game.js`, which wires it all to the contract.
